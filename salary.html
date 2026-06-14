@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="uk">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Зарплата</title>
+  <meta name="theme-color" content="#45d19e">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Shifter">
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="icon.svg">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23111216'/%3E%3Cpath d='M32 14v18l11 11' fill='none' stroke='%2345d19e' stroke-width='6' stroke-linecap='round' stroke-linejoin='round'/%3E%3Ccircle cx='32' cy='32' r='22' fill='none' stroke='%23f4f6f8' stroke-width='4'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main class="page">
+    <header class="page-header">
+      <p class="eyebrow">Підсумки оплат</p>
+      <h1>Зарплата</h1>
+    </header>
+
+    <section class="panel salary-summary">
+      <div class="metric">
+        <span>За місяць</span>
+        <strong id="salaryMonthTotal">0,00 грн</strong>
+      </div>
+      <div class="metric">
+        <span>За вибраний день</span>
+        <strong id="salaryDayTotal">0,00 грн</strong>
+      </div>
+    </section>
+
+    <section class="panel calendar-panel">
+      <div class="calendar-header">
+        <button class="calendar-nav" id="salaryPrevMonthBtn" type="button" aria-label="Попередній місяць">‹</button>
+        <h2 id="salaryCalendarTitle">Місяць</h2>
+        <button class="calendar-nav" id="salaryNextMonthBtn" type="button" aria-label="Наступний місяць">›</button>
+      </div>
+      <div class="calendar-weekdays" aria-hidden="true">
+        <span>Пн</span>
+        <span>Вт</span>
+        <span>Ср</span>
+        <span>Чт</span>
+        <span>Пт</span>
+        <span>Сб</span>
+        <span>Нд</span>
+      </div>
+      <div class="calendar-grid" id="salaryCalendarGrid" aria-label="Календар зарплати"></div>
+      <div class="calendar-actions">
+        <button class="clear" id="salaryTodayBtn" type="button">Сьогодні</button>
+        <button class="clear" id="salaryMonthBtn" type="button">Місяць</button>
+      </div>
+      <div class="calendar-actions report-actions">
+        <button class="clear" id="copyDayReportBtn" type="button">Копіювати день</button>
+        <button class="clear" id="copyMonthReportBtn" type="button">Копіювати місяць</button>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2 id="salaryListTitle">Зміни за день</h2>
+      <ul class="history" id="salaryList"></ul>
+      <p class="empty" id="salaryEmpty">За цей день записів немає.</p>
+    </section>
+  </main>
+
+  <div id="bottomNav"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>

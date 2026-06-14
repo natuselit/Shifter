@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="uk">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Зміна</title>
+  <meta name="theme-color" content="#45d19e">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Shifter">
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="icon.svg">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23111216'/%3E%3Cpath d='M32 14v18l11 11' fill='none' stroke='%2345d19e' stroke-width='6' stroke-linecap='round' stroke-linejoin='round'/%3E%3Ccircle cx='32' cy='32' r='22' fill='none' stroke='%23f4f6f8' stroke-width='4'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main class="page">
+    <header class="page-header">
+      <h1>Зміна</h1>
+    </header>
+
+    <section class="panel shift-panel">
+      <button class="timer-ring" id="timerRing" type="button" aria-label="Прихід">
+        <svg class="ring-svg" viewBox="0 0 120 120" aria-hidden="true">
+          <g class="svg-ring svg-ring-hold" data-ring="hold">
+            <circle class="ring-track" cx="60" cy="60" r="56" pathLength="100"></circle>
+            <g class="ring-progress-layer">
+              <circle class="ring-progress" cx="60" cy="60" r="56" pathLength="100" stroke-dasharray="0 100" stroke-dashoffset="0"></circle>
+            </g>
+          </g>
+        </svg>
+        <div class="timer-card">
+          <div class="timer-face timer-front">
+            <span class="ring-action" id="ringAction">Старт</span>
+            <span class="ring-hint" id="ringHint">утримуйте 3 с</span>
+            <span class="ring-clock" id="ringClock">--:--</span>
+            <p class="time" id="elapsed">00:00:00</p>
+            <span class="ring-pay" id="ringPay">0,00 грн</span>
+          </div>
+        </div>
+      </button>
+    </section>
+
+  </main>
+
+  <div id="bottomNav"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
