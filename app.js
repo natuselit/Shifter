@@ -2,8 +2,7 @@ const defaultSettings = {
   rate: 0,
   startHoldSeconds: 3,
   endHoldSeconds: 5,
-  surname: '',
-  breaks: []
+  surname: ''
 };
 
 const navItems = [
@@ -47,8 +46,7 @@ function normalizeSettingsValue(settings) {
     rate: Number(settings.rate) || 0,
     startHoldSeconds: clampHoldSeconds(settings.startHoldSeconds, defaultSettings.startHoldSeconds),
     endHoldSeconds: clampHoldSeconds(settings.endHoldSeconds, defaultSettings.endHoldSeconds),
-    surname: String(settings.surname || '').trim(),
-    breaks: normalizeBreaks(settings.breaks)
+    surname: String(settings.surname || '').trim()
   };
 }
 
@@ -89,19 +87,6 @@ const storage = {
     } else {
       localStorage.removeItem('activeRate');
     }
-  },
-  get activeBreaks() {
-    try {
-      return normalizeBreaks(JSON.parse(localStorage.getItem('activeBreaks') || '[]'));
-    } catch {
-      return [];
-    }
-  },
-  get hasActiveBreaks() {
-    return localStorage.getItem('activeBreaks') !== null;
-  },
-  set activeBreaks(value) {
-    localStorage.setItem('activeBreaks', JSON.stringify(normalizeBreaks(value)));
   },
   get lastShift() {
     return readJsonStorage('lastShift', null);
@@ -150,11 +135,10 @@ function normalizeSettings() {
   const settings = storage.settings;
 
   storage.settings = settings;
-  storage.activeBreaks = storage.activeBreaks;
   if (!storage.startedAt) {
     storage.activeRate = null;
-    localStorage.removeItem('activeBreaks');
   }
+  localStorage.removeItem('activeBreaks');
   localStorage.removeItem('airAlarmStartedAt');
   localStorage.removeItem('airAlarmMs');
   localStorage.removeItem('airAlarmIntervals');
@@ -174,19 +158,19 @@ function normalizeShifts() {
       surname,
       alarmIntervals,
       airAlarmMs,
+      breaks,
       ...shiftWithoutRemovedFields
     } = normalizedShift;
     const rateMultiplier = normalizeRateMultiplier(normalizedShift.rateMultiplier ?? (normalizedShift.doubleRate ? 2 : 1));
-    const breaks = normalizeBreaks(normalizedShift.breaks);
 
     if (
       normalizedShift.id &&
       normalizedShift.shiftType &&
-      Array.isArray(normalizedShift.breaks) &&
       normalizedShift.rateMultiplier === rateMultiplier &&
       surname === undefined &&
       alarmIntervals === undefined &&
-      airAlarmMs === undefined
+      airAlarmMs === undefined &&
+      breaks === undefined
     ) {
       return shiftWithoutRemovedFields;
     }
@@ -197,8 +181,7 @@ function normalizeShifts() {
       id: normalizedShift.id || `${normalizedShift.startedAt}-${normalizedShift.endedAt}-${index}`,
       shiftType: normalizedShift.shiftType || detectShiftType(normalizedShift.startedAt),
       rateMultiplier,
-      doubleRate: rateMultiplier === 2,
-      breaks
+      doubleRate: rateMultiplier === 2
     };
   }).filter(Boolean);
 
@@ -551,50 +534,6 @@ function getTimeMinutes(value) {
   return hours * 60 + minutes;
 }
 
-function normalizeBreaks(breaks) {
-  if (!Array.isArray(breaks)) return [];
-
-  return breaks
-    .map((item) => ({
-      startedAt: String(item?.startedAt || '').slice(0, 5),
-      endedAt: String(item?.endedAt || '').slice(0, 5)
-    }))
-    .filter((item) => {
-      const started = getTimeMinutes(item.startedAt);
-      const ended = getTimeMinutes(item.endedAt);
-      return started !== null && ended !== null && ended > started;
-    })
-    .sort((first, second) => getTimeMinutes(first.startedAt) - getTimeMinutes(second.startedAt));
-}
-
-function validateBreaks(breaks) {
-  const normalized = normalizeBreaks(breaks);
-
-  if (normalized.length !== (Array.isArray(breaks) ? breaks.length : 0)) {
-    return null;
-  }
-
-  for (let index = 1; index < normalized.length; index += 1) {
-    if (getTimeMinutes(normalized[index].startedAt) < getTimeMinutes(normalized[index - 1].endedAt)) {
-      return null;
-    }
-  }
-
-  return normalized;
-}
-
-function formatBreaks(breaks) {
-  const normalized = normalizeBreaks(breaks);
-  if (normalized.length === 0) return 'перерви немає';
-  return `перерви: ${normalized.map((item) => `${item.startedAt}-${item.endedAt}`).join(', ')}`;
-}
-
-function getBreaksDurationMs(breaks) {
-  return normalizeBreaks(breaks).reduce((total, item) => {
-    return total + (getTimeMinutes(item.endedAt) - getTimeMinutes(item.startedAt)) * 60000;
-  }, 0);
-}
-
 function normalizeRateMultiplier(value) {
   const multiplier = Number(value);
   return multiplier === 1.5 || multiplier === 2 ? multiplier : 1;
@@ -613,6 +552,10 @@ function isValidTimestamp(value) {
   return Number.isFinite(Number(value)) && Number(value) > 0;
 }
 
+function normalizeShiftType(value, fallbackTimestamp = Date.now()) {
+  return value === '1 зміна' || value === '2 зміна' ? value : detectShiftType(fallbackTimestamp);
+}
+
 function normalizeShiftValue(shift, index = 0, options = {}) {
   if (!shift || typeof shift !== 'object') return null;
 
@@ -621,15 +564,13 @@ function normalizeShiftValue(shift, index = 0, options = {}) {
   const rawRate = Number(shift.rate);
   const rate = Number.isFinite(rawRate) && rawRate >= 0 ? rawRate : 0;
   const rateMultiplier = normalizeRateMultiplier(shift.rateMultiplier ?? (shift.doubleRate ? 2 : 1));
-  const breaks = validateBreaks(Array.isArray(shift.breaks) ? shift.breaks : []);
 
   if (
     !isValidTimestamp(startedAt) ||
     !isValidTimestamp(endedAt) ||
     endedAt < startedAt ||
     (options.strict && (!Number.isFinite(rawRate) || rawRate < 0)) ||
-    !hasValidRateMultiplier(shift) ||
-    !breaks
+    !hasValidRateMultiplier(shift)
   ) {
     return null;
   }
@@ -640,10 +581,9 @@ function normalizeShiftValue(shift, index = 0, options = {}) {
     startedAt,
     endedAt,
     rate,
-    shiftType: shift.shiftType || detectShiftType(startedAt),
+    shiftType: normalizeShiftType(shift.shiftType, startedAt),
     rateMultiplier,
-    doubleRate: rateMultiplier === 2,
-    breaks
+    doubleRate: rateMultiplier === 2
   };
 }
 
@@ -653,6 +593,33 @@ function getDateKey(value) {
   const month = String(date.getMonth() + 1).padStart(2, '0');
   const day = String(date.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
+}
+
+function getTimestampFromDateKey(dateKey, endOfDay = false) {
+  const [year, month, day] = String(dateKey || '').split('-').map(Number);
+  const date = new Date(year, month - 1, day);
+
+  if (
+    !Number.isInteger(year) ||
+    !Number.isInteger(month) ||
+    !Number.isInteger(day) ||
+    date.getFullYear() !== year ||
+    date.getMonth() !== month - 1 ||
+    date.getDate() !== day
+  ) {
+    return null;
+  }
+
+  date.setHours(endOfDay ? 23 : 0, endOfDay ? 59 : 0, endOfDay ? 59 : 0, endOfDay ? 999 : 0);
+  return date.getTime();
+}
+
+function isShiftInDateRange(shift, startKey, endKey) {
+  if (!startKey || !endKey) return true;
+
+  const start = getTimestampFromDateKey(startKey);
+  const end = getTimestampFromDateKey(endKey, true);
+  return start !== null && end !== null && shift.startedAt >= start && shift.startedAt <= end;
 }
 
 function getMinutesFromDayStart(timestamp) {
@@ -785,8 +752,6 @@ function formatPayDetails(shift) {
       parts.push(`перепрацювання x1.5: ${formatDuration(breakdown.overtimeMs)}`);
     }
   }
-
-  parts.push(formatBreaks(shift.breaks));
 
   return parts.join(' · ');
 }
@@ -946,7 +911,6 @@ function getReportText(shifts, title) {
           formatHoursMinutes(shift.endedAt - shift.startedAt),
           formatRate(shift.rate),
           `x${multiplier}`,
-          formatBreaks(shift.breaks),
           formatMoney(calculatePay(shift))
         ].join(' · ')
       );
@@ -1038,19 +1002,25 @@ function setupTimerPage() {
 
   function startShift() {
     const settings = storage.settings;
+    if (hasShiftOnDate(getDateKey(new Date()))) {
+      showToast('За сьогодні вже є зміна', 'error');
+      return;
+    }
     storage.startedAt = Date.now();
     storage.activeRate = settings.rate;
-    storage.activeBreaks = settings.breaks;
     storage.rateMultiplier = 1;
     renderTimer();
   }
 
   function endShift() {
     if (!storage.startedAt) return;
+    if (hasShiftOnDate(getDateKey(storage.startedAt))) {
+      showToast('За цей день вже є зміна', 'error');
+      return;
+    }
 
     const settings = storage.settings;
     const activeRate = storage.activeRate ?? settings.rate;
-    const activeBreaks = storage.activeBreaks;
     const rateMultiplier = storage.rateMultiplier;
     const endedAt = Date.now();
     const shift = {
@@ -1060,8 +1030,7 @@ function setupTimerPage() {
       rate: activeRate,
       shiftType: detectShiftType(storage.startedAt),
       rateMultiplier,
-      doubleRate: rateMultiplier === 2,
-      breaks: storage.hasActiveBreaks ? activeBreaks : settings.breaks
+      doubleRate: rateMultiplier === 2
     };
     const shifts = storage.shifts;
 
@@ -1135,6 +1104,8 @@ function setupTimerPage() {
 const calendarState = {
   visibleMonth: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
   selectedDateKey: null,
+  rangeStartKey: null,
+  rangeEndKey: null,
   editingShiftId: null,
   creatingShift: false,
   filter: 'all'
@@ -1142,12 +1113,72 @@ const calendarState = {
 
 const salaryState = {
   visibleMonth: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
-  selectedDateKey: getDateKey(new Date())
+  selectedDateKey: getDateKey(new Date()),
+  rangeStartKey: null,
+  rangeEndKey: null
 };
 
 const analyticsState = {
-  visibleMonth: new Date(new Date().getFullYear(), new Date().getMonth(), 1)
+  visibleMonth: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
+  rangeStartKey: null,
+  rangeEndKey: null
 };
+
+function getRangeKeys(state) {
+  if (!state.rangeStartKey || !state.rangeEndKey) return null;
+  return state.rangeStartKey <= state.rangeEndKey
+    ? { startKey: state.rangeStartKey, endKey: state.rangeEndKey }
+    : { startKey: state.rangeEndKey, endKey: state.rangeStartKey };
+}
+
+function setRangeDate(state, dateKey) {
+  if (!state.rangeStartKey || state.rangeEndKey) {
+    state.rangeStartKey = dateKey;
+    state.rangeEndKey = null;
+    return;
+  }
+
+  if (dateKey < state.rangeStartKey) {
+    state.rangeEndKey = state.rangeStartKey;
+    state.rangeStartKey = dateKey;
+    return;
+  }
+
+  state.rangeEndKey = dateKey;
+}
+
+function clearRange(state) {
+  state.rangeStartKey = null;
+  state.rangeEndKey = null;
+}
+
+function getRangeLabel(state) {
+  const range = getRangeKeys(state);
+  if (!range) return '';
+
+  const start = formatDateOnly(getTimestampFromDateKey(range.startKey));
+  const end = formatDateOnly(getTimestampFromDateKey(range.endKey));
+  return range.startKey === range.endKey ? start : `${start} - ${end}`;
+}
+
+function applyCalendarDayRangeClasses(button, dateKey, state) {
+  const range = getRangeKeys(state);
+
+  if (!range) {
+    button.classList.toggle('range-edge', dateKey === state.rangeStartKey);
+    return;
+  }
+
+  const inRange = dateKey >= range.startKey && dateKey <= range.endKey;
+  button.classList.toggle('in-range', inRange);
+  button.classList.toggle('range-edge', dateKey === range.startKey || dateKey === range.endKey);
+}
+
+function filterShiftsByRange(shifts, state) {
+  const range = getRangeKeys(state);
+  if (!range) return shifts;
+  return shifts.filter((shift) => isShiftInDateRange(shift, range.startKey, range.endKey));
+}
 
 function renderCalendar() {
   const calendarGrid = document.getElementById('calendarGrid');
@@ -1192,6 +1223,7 @@ function renderCalendar() {
     if (dateKey === calendarState.selectedDateKey) {
       button.classList.add('selected');
     }
+    applyCalendarDayRangeClasses(button, dateKey, calendarState);
 
     if (shiftDates.has(dateKey)) {
       button.classList.add('has-shifts');
@@ -1199,6 +1231,7 @@ function renderCalendar() {
 
     button.addEventListener('click', () => {
       calendarState.selectedDateKey = dateKey;
+      setRangeDate(calendarState, dateKey);
       calendarState.visibleMonth = new Date(date.getFullYear(), date.getMonth(), 1);
       calendarState.creatingShift = false;
       renderCalendar();
@@ -1221,8 +1254,7 @@ function getActiveHistoryShift() {
     rate: storage.activeRate ?? settings.rate,
     shiftType: detectShiftType(storage.startedAt),
     rateMultiplier: storage.rateMultiplier,
-    doubleRate: storage.rateMultiplier === 2,
-    breaks: storage.hasActiveBreaks ? storage.activeBreaks : settings.breaks
+    doubleRate: storage.rateMultiplier === 2
   };
 }
 
@@ -1269,7 +1301,10 @@ function renderHistory() {
   const shifts = storage.shifts;
   const activeShift = getActiveHistoryShift();
   const allHistoryShifts = activeShift ? [activeShift, ...shifts] : shifts;
-  const dateFilteredShifts = calendarState.selectedDateKey
+  const rangedShifts = filterShiftsByRange(allHistoryShifts, calendarState);
+  const dateFilteredShifts = getRangeKeys(calendarState)
+    ? rangedShifts
+    : calendarState.selectedDateKey
     ? allHistoryShifts.filter((shift) => getDateKey(shift.startedAt) === calendarState.selectedDateKey)
     : allHistoryShifts;
   const filteredShifts = dateFilteredShifts.filter(matchesHistoryFilter);
@@ -1282,7 +1317,10 @@ function renderHistory() {
   }
 
   if (historyTitle) {
-    historyTitle.textContent = calendarState.selectedDateKey
+    const rangeLabel = getRangeLabel(calendarState);
+    historyTitle.textContent = rangeLabel
+      ? `Зміни за ${rangeLabel}`
+      : calendarState.selectedDateKey
       ? `Зміни за ${formatDateOnly(new Date(`${calendarState.selectedDateKey}T00:00:00`).getTime())}`
       : 'Усі зміни';
     if (calendarState.filter !== 'all') {
@@ -1290,7 +1328,9 @@ function renderHistory() {
     }
   }
 
-  emptyHistory.textContent = calendarState.selectedDateKey
+  emptyHistory.textContent = getRangeKeys(calendarState)
+    ? 'За цей період і фільтр записів немає.'
+    : calendarState.selectedDateKey
     ? 'За цей день і фільтр записів немає.'
     : calendarState.filter === 'all'
       ? 'Історія порожня.'
@@ -1298,27 +1338,53 @@ function renderHistory() {
 
   filteredShifts.forEach((shift) => {
     const item = document.createElement('li');
-    const duration = document.createElement('strong');
-    const dates = document.createElement('span');
-    const details = document.createElement('span');
+    const header = document.createElement('div');
+    const titleGroup = document.createElement('div');
+    const dateText = document.createElement('span');
+    const typeBadge = document.createElement('span');
+    const amount = document.createElement('strong');
+    const meta = document.createElement('div');
+    const timeText = document.createElement('span');
+    const durationText = document.createElement('span');
+    const rateText = document.createElement('span');
     const actions = document.createElement('div');
     const editButton = document.createElement('button');
     const deleteButton = document.createElement('button');
+    const shiftType = shift.shiftType || detectShiftType(shift.startedAt);
+    const multiplier = normalizeRateMultiplier(shift.rateMultiplier ?? (shift.doubleRate ? 2 : 1));
 
-    item.className = shift.active ? 'active-history-item' : '';
-    duration.textContent = `${shift.active ? 'Поточна зміна · ' : ''}${formatDuration(shift.endedAt - shift.startedAt)} · ${formatMoney(calculatePay(shift))}`;
-    dates.textContent = shift.active
-      ? `${formatDateTime(shift.startedAt)} - зараз`
-      : `${formatDateTime(shift.startedAt)} - ${formatDateTime(shift.endedAt)}`;
-    details.textContent = `${shift.shiftType || detectShiftType(shift.startedAt)} · ${formatPayDetails(shift)} · ставка ${formatMoney(Number(shift.rate) || 0)}/год${shift.active ? ' · активна' : ''}`;
+    item.className = [
+      'history-card',
+      shiftType === '2 зміна' ? 'shift-second-card' : 'shift-first-card',
+      shift.active ? 'active-history-item' : ''
+    ].filter(Boolean).join(' ');
+    header.className = 'history-card-header';
+    titleGroup.className = 'history-title-group';
+    dateText.className = 'history-date';
+    typeBadge.className = 'history-badge';
+    amount.className = 'history-amount';
+    meta.className = 'history-meta';
+    dateText.textContent = shift.active ? 'Поточна зміна' : formatDateOnly(shift.startedAt);
+    typeBadge.textContent = shiftType;
+    typeBadge.classList.add(shiftType === '2 зміна' ? 'second-shift' : 'first-shift');
+    amount.textContent = formatMoney(calculatePay(shift));
+    timeText.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8v5l3 2"></path><circle cx="12" cy="12" r="9"></circle></svg><span>${shift.active
+      ? `${formatTimeOnly(shift.startedAt)} - зараз`
+      : `${formatTimeOnly(shift.startedAt)} - ${formatTimeOnly(shift.endedAt)}`}</span>`;
+    durationText.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h18"></path><path d="M7 8l-4 4 4 4"></path><path d="M17 8l4 4-4 4"></path></svg><span>${formatHoursMinutes(shift.endedAt - shift.startedAt)}</span>`;
+    rateText.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2v20"></path><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7H14a3.5 3.5 0 0 1 0 7H6"></path></svg><span>${multiplier === 1 ? formatRate(shift.rate) : `${formatRate(shift.rate)} · x${multiplier}`}</span>`;
 
     actions.className = shift.active ? 'history-actions active-history-actions' : 'history-actions';
     editButton.className = 'small-action';
     editButton.type = 'button';
-    editButton.textContent = 'Редагувати';
+    editButton.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9"></path><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"></path></svg>';
+    editButton.setAttribute('aria-label', 'Редагувати');
+    editButton.title = 'Редагувати';
     deleteButton.className = 'small-action danger-action';
     deleteButton.type = 'button';
-    deleteButton.textContent = 'Видалити';
+    deleteButton.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18"></path><path d="M8 6V4h8v2"></path><path d="M19 6l-1 14H6L5 6"></path><path d="M10 11v5"></path><path d="M14 11v5"></path></svg>';
+    deleteButton.setAttribute('aria-label', 'Видалити');
+    deleteButton.title = 'Видалити';
 
     editButton.addEventListener('click', () => {
       calendarState.creatingShift = false;
@@ -1341,8 +1407,11 @@ function renderHistory() {
       showToast('Зміну видалено', 'success');
     });
 
+    titleGroup.append(dateText, typeBadge);
+    header.append(titleGroup, amount);
+    meta.append(timeText, durationText, rateText);
     actions.append(editButton, deleteButton);
-    item.append(duration, dates, details, actions);
+    item.append(header, meta, actions);
 
     if (calendarState.editingShiftId === shift.id) {
       item.append(shift.active ? createActiveEditForm(shift) : createEditForm(shift));
@@ -1358,7 +1427,7 @@ function renderHistory() {
 
     item.className = 'create-history-item';
     title.textContent = 'Нова зміна';
-    details.textContent = 'Заповніть час, ставку, коефіцієнт і перерви.';
+    details.textContent = 'Заповніть час, тип зміни, ставку і коефіцієнт.';
     item.append(title, details, createEditForm(getDefaultNewShift(), { mode: 'create' }));
     history.prepend(item);
     emptyHistory.hidden = true;
@@ -1381,10 +1450,9 @@ function getDefaultNewShift() {
     startedAt: startedAt.getTime(),
     endedAt: endedAt.getTime(),
     rate: settings.rate,
-    shiftType: detectShiftType(startedAt.getTime()),
+    shiftType: '1 зміна',
     rateMultiplier: 1,
-    doubleRate: false,
-    breaks: settings.breaks
+    doubleRate: false
   };
 }
 
@@ -1392,11 +1460,6 @@ function createActiveEditForm(shift) {
   const form = document.createElement('form');
   const startedLabel = document.createElement('label');
   const rateLabel = document.createElement('label');
-  const breakSection = document.createElement('div');
-  const breakHeader = document.createElement('div');
-  const breakTitle = document.createElement('strong');
-  const addBreakButton = document.createElement('button');
-  const breakList = document.createElement('div');
   const startedInput = document.createElement('input');
   const rateInput = document.createElement('input');
   const actions = document.createElement('div');
@@ -1405,13 +1468,6 @@ function createActiveEditForm(shift) {
   const formError = document.createElement('p');
 
   form.className = 'edit-form';
-  breakSection.className = 'break-editor';
-  breakHeader.className = 'break-editor-header';
-  breakTitle.textContent = 'Перерви';
-  addBreakButton.className = 'small-action';
-  addBreakButton.type = 'button';
-  addBreakButton.textContent = 'Додати перерву';
-  breakList.className = 'break-list';
   startedInput.type = 'text';
   startedInput.required = true;
   startedInput.placeholder = '2026-06-14 06:30';
@@ -1434,47 +1490,12 @@ function createActiveEditForm(shift) {
 
   startedLabel.append('Прихід', startedInput);
   rateLabel.append('Ставка, грн/год', rateInput);
-  breakHeader.append(breakTitle, addBreakButton);
-  breakSection.append(breakHeader, breakList);
 
   function showEditError(message) {
     formError.textContent = message;
     formError.hidden = !message;
   }
 
-  function addBreakRow(breakItem = null) {
-    const row = document.createElement('div');
-    const startLabel = document.createElement('label');
-    const endLabel = document.createElement('label');
-    const startInput = document.createElement('input');
-    const endInput = document.createElement('input');
-    const removeButton = document.createElement('button');
-
-    row.className = 'break-row';
-    startInput.type = 'text';
-    startInput.placeholder = '10:00';
-    endInput.type = 'text';
-    endInput.placeholder = '10:15';
-    setupPickerInput(startInput, 'time');
-    setupPickerInput(endInput, 'time');
-    removeButton.className = 'small-action danger-action';
-    removeButton.type = 'button';
-    removeButton.textContent = 'Видалити';
-
-    if (breakItem) {
-      startInput.value = breakItem.startedAt;
-      endInput.value = breakItem.endedAt;
-    }
-
-    removeButton.addEventListener('click', () => row.remove());
-    startLabel.append('З', startInput);
-    endLabel.append('По', endInput);
-    row.append(startLabel, endLabel, removeButton);
-    breakList.append(row);
-  }
-
-  normalizeBreaks(shift.breaks).forEach((breakItem) => addBreakRow(breakItem));
-  addBreakButton.addEventListener('click', () => addBreakRow());
   cancelButton.addEventListener('click', () => {
     calendarState.editingShiftId = null;
     renderHistory();
@@ -1488,23 +1509,13 @@ function createActiveEditForm(shift) {
       showEditError('Перевірте час приходу.');
       return;
     }
-
-    const nextBreaks = Array.from(breakList.querySelectorAll('.break-row')).map((row) => {
-      const inputs = row.querySelectorAll('input');
-      return {
-        startedAt: inputs[0]?.value || '',
-        endedAt: inputs[1]?.value || ''
-      };
-    });
-    const validBreaks = validateBreaks(nextBreaks);
-    if (!validBreaks) {
-      showEditError('Перевірте перерви: кінець має бути пізніше початку, без перетинів.');
+    if (hasShiftOnDate(getDateKey(nextStartedAt))) {
+      showEditError('За цей день вже є зміна. На один день можна додати тільки одну зміну.');
       return;
     }
 
     storage.startedAt = nextStartedAt;
     storage.activeRate = Number(rateInput.value) || 0;
-    storage.activeBreaks = validBreaks;
     calendarState.editingShiftId = null;
     calendarState.selectedDateKey = getDateKey(nextStartedAt);
     calendarState.visibleMonth = new Date(new Date(nextStartedAt).getFullYear(), new Date(nextStartedAt).getMonth(), 1);
@@ -1514,8 +1525,51 @@ function createActiveEditForm(shift) {
   });
 
   actions.append(saveButton, cancelButton);
-  form.append(startedLabel, rateLabel, breakSection, formError, actions);
+  form.append(startedLabel, rateLabel, formError, actions);
   return form;
+}
+
+function createShiftTypeControl(initialValue) {
+  const wrapper = document.createElement('div');
+  const title = document.createElement('span');
+  const options = document.createElement('div');
+  const inputs = [];
+  const selectedValue = normalizeShiftType(initialValue);
+  const inputName = `shiftType-${createShiftId()}`;
+
+  wrapper.className = 'shift-type-control';
+  title.textContent = 'Тип зміни';
+  options.className = 'segmented-control';
+
+  ['1 зміна', '2 зміна'].forEach((label, index) => {
+    const option = document.createElement('label');
+    const input = document.createElement('input');
+    const text = document.createElement('span');
+
+    input.type = 'radio';
+    input.name = inputName;
+    input.value = label;
+    input.checked = label === selectedValue || (!selectedValue && index === 0);
+    text.textContent = label;
+    option.append(input, text);
+    options.append(option);
+    inputs.push(input);
+  });
+
+  wrapper.append(title, options);
+
+  return {
+    element: wrapper,
+    get value() {
+      return inputs.find((input) => input.checked)?.value || '1 зміна';
+    }
+  };
+}
+
+function hasShiftOnDate(dateKey, ignoredShiftId = null) {
+  return storage.shifts.some((savedShift) => {
+    return savedShift.id !== ignoredShiftId && getDateKey(savedShift.startedAt) === dateKey;
+  });
 }
 
 function createEditForm(shift, options = {}) {
@@ -1524,14 +1578,10 @@ function createEditForm(shift, options = {}) {
   const form = document.createElement('form');
   const startedLabel = document.createElement('label');
   const endedLabel = document.createElement('label');
+  const shiftTypeControl = createShiftTypeControl(shift.shiftType || detectShiftType(shift.startedAt));
   const rateLabel = document.createElement('label');
   const rate15Label = document.createElement('label');
   const doubleRateLabel = document.createElement('label');
-  const breakSection = document.createElement('div');
-  const breakHeader = document.createElement('div');
-  const breakTitle = document.createElement('strong');
-  const addBreakButton = document.createElement('button');
-  const breakList = document.createElement('div');
   const startedInput = document.createElement('input');
   const endedInput = document.createElement('input');
   const rateInput = document.createElement('input');
@@ -1541,17 +1591,9 @@ function createEditForm(shift, options = {}) {
   const saveButton = document.createElement('button');
   const cancelButton = document.createElement('button');
   const formError = document.createElement('p');
-  const shiftBreaks = normalizeBreaks(shift.breaks);
   const rateMultiplier = normalizeRateMultiplier(shift.rateMultiplier ?? (shift.doubleRate ? 2 : 1));
 
   form.className = 'edit-form';
-  breakSection.className = 'break-editor';
-  breakHeader.className = 'break-editor-header';
-  breakTitle.textContent = 'Перерви';
-  addBreakButton.className = 'small-action';
-  addBreakButton.type = 'button';
-  addBreakButton.textContent = 'Додати перерву';
-  breakList.className = 'break-list';
   startedInput.type = 'text';
   startedInput.required = true;
   startedInput.placeholder = '2026-06-14 06:30';
@@ -1579,8 +1621,6 @@ function createEditForm(shift, options = {}) {
   rate15Label.append(rate15Input, 'Коефіцієнт x1.5');
   doubleRateLabel.className = 'checkbox-row';
   doubleRateLabel.append(doubleRateInput, 'Коефіцієнт x2');
-  breakHeader.append(breakTitle, addBreakButton);
-  breakSection.append(breakHeader, breakList);
 
   actions.className = 'edit-actions';
   formError.className = 'form-error';
@@ -1606,46 +1646,6 @@ function createEditForm(shift, options = {}) {
     formError.hidden = !message;
   }
 
-  function addBreakRow(breakItem = null) {
-    const row = document.createElement('div');
-    const startLabel = document.createElement('label');
-    const endLabel = document.createElement('label');
-    const startInput = document.createElement('input');
-    const endInput = document.createElement('input');
-    const removeButton = document.createElement('button');
-
-    row.className = 'break-row';
-    startInput.type = 'text';
-    startInput.placeholder = '10:00';
-    endInput.type = 'text';
-    endInput.placeholder = '10:15';
-    setupPickerInput(startInput, 'time');
-    setupPickerInput(endInput, 'time');
-    removeButton.className = 'small-action danger-action';
-    removeButton.type = 'button';
-    removeButton.textContent = 'Видалити';
-
-    if (breakItem) {
-      startInput.value = breakItem.startedAt;
-      endInput.value = breakItem.endedAt;
-    }
-
-    removeButton.addEventListener('click', () => {
-      row.remove();
-    });
-
-    startLabel.append('З', startInput);
-    endLabel.append('По', endInput);
-    row.append(startLabel, endLabel, removeButton);
-    breakList.append(row);
-  }
-
-  shiftBreaks.forEach((breakItem) => addBreakRow(breakItem));
-
-  addBreakButton.addEventListener('click', () => {
-    addBreakRow();
-  });
-
   rate15Input.addEventListener('change', () => {
     if (rate15Input.checked) {
       doubleRateInput.checked = false;
@@ -1669,30 +1669,11 @@ function createEditForm(shift, options = {}) {
       return;
     }
 
-    const nextBreaks = [];
-    const rows = Array.from(breakList.querySelectorAll('.break-row'));
-
-    for (const row of rows) {
-      const inputs = row.querySelectorAll('input');
-      const breakStartInput = inputs[0];
-      const breakEndInput = inputs[1];
-
-      if (!breakStartInput.value || !breakEndInput.value) {
-        showEditError('Перевірте початок і кінець перерви.');
-        return;
-      }
-
-      nextBreaks.push({
-        startedAt: breakStartInput.value,
-        endedAt: breakEndInput.value
-      });
-    }
-
-    const validBreaks = validateBreaks(nextBreaks);
-    if (!validBreaks) {
-      showEditError('Перевірте перерви: кінець має бути пізніше початку, без перетинів.');
+    if (hasShiftOnDate(getDateKey(startedAt), isCreateMode ? null : shift.id)) {
+      showEditError('За цей день вже є зміна. На один день можна додати тільки одну зміну.');
       return;
     }
+
     const nextRateMultiplier = doubleRateInput.checked ? 2 : (rate15Input.checked ? 1.5 : 1);
 
     const nextShift = {
@@ -1701,10 +1682,9 @@ function createEditForm(shift, options = {}) {
       startedAt,
       endedAt,
       rate: Number(rateInput.value) || 0,
-      shiftType: detectShiftType(startedAt),
+      shiftType: shiftTypeControl.value,
       rateMultiplier: nextRateMultiplier,
-      doubleRate: nextRateMultiplier === 2,
-      breaks: validBreaks
+      doubleRate: nextRateMultiplier === 2
     };
     const nextShifts = (isCreateMode
       ? [nextShift, ...storage.shifts]
@@ -1723,7 +1703,7 @@ function createEditForm(shift, options = {}) {
   });
 
   actions.append(saveButton, cancelButton);
-  form.append(startedLabel, endedLabel, rateLabel, rate15Label, doubleRateLabel, breakSection, formError, actions);
+  form.append(startedLabel, endedLabel, shiftTypeControl.element, rateLabel, rate15Label, doubleRateLabel, formError, actions);
   return form;
 }
 
@@ -1749,6 +1729,7 @@ function setupHistoryPage() {
     storage.shifts = [];
     storage.lastShift = null;
     calendarState.selectedDateKey = null;
+    clearRange(calendarState);
     calendarState.creatingShift = false;
     calendarState.editingShiftId = null;
     renderCalendar();
@@ -1784,6 +1765,8 @@ function setupHistoryPage() {
     todayBtn.addEventListener('click', () => {
       const today = new Date();
       calendarState.selectedDateKey = getDateKey(today);
+      calendarState.rangeStartKey = calendarState.selectedDateKey;
+      calendarState.rangeEndKey = calendarState.selectedDateKey;
       calendarState.visibleMonth = new Date(today.getFullYear(), today.getMonth(), 1);
       calendarState.creatingShift = false;
       renderCalendar();
@@ -1794,6 +1777,7 @@ function setupHistoryPage() {
   if (showAllBtn) {
     showAllBtn.addEventListener('click', () => {
       calendarState.selectedDateKey = null;
+      clearRange(calendarState);
       calendarState.creatingShift = false;
       renderCalendar();
       renderHistory();
@@ -1837,7 +1821,8 @@ function renderSalaryCalendar() {
   if (!calendarGrid || !calendarTitle || !monthTotal) return;
 
   const month = salaryState.visibleMonth;
-  const monthShifts = getMonthShifts(month);
+  const range = getRangeKeys(salaryState);
+  const monthShifts = range ? filterShiftsByRange(storage.shifts, salaryState) : getMonthShifts(month);
   const shiftDates = new Set();
 
   monthShifts.forEach((shift) => {
@@ -1884,9 +1869,11 @@ function renderSalaryCalendar() {
     if (dateKey === salaryState.selectedDateKey) {
       button.classList.add('selected');
     }
+    applyCalendarDayRangeClasses(button, dateKey, salaryState);
 
     button.addEventListener('click', () => {
       salaryState.selectedDateKey = dateKey;
+      setRangeDate(salaryState, dateKey);
       salaryState.visibleMonth = new Date(date.getFullYear(), date.getMonth(), 1);
       renderSalaryCalendar();
       renderSalaryList();
@@ -1903,32 +1890,66 @@ function renderSalaryList() {
   const salaryListTitle = document.getElementById('salaryListTitle');
   if (!dayTotal || !salaryList || !salaryEmpty || !salaryListTitle) return;
 
-  const dayShifts = salaryState.selectedDateKey
+  const range = getRangeKeys(salaryState);
+  const dayShifts = range
+    ? filterShiftsByRange(storage.shifts, salaryState)
+    : salaryState.selectedDateKey
     ? storage.shifts.filter((shift) => getDateKey(shift.startedAt) === salaryState.selectedDateKey)
     : getMonthShifts(salaryState.visibleMonth);
   const total = dayShifts.reduce((sum, shift) => sum + calculatePay(shift), 0);
 
   dayTotal.textContent = formatMoney(total);
-  salaryListTitle.textContent = salaryState.selectedDateKey
+  salaryListTitle.textContent = range
+    ? `Зміни за ${getRangeLabel(salaryState)}`
+    : salaryState.selectedDateKey
     ? `Зміни за ${formatDateOnly(new Date(`${salaryState.selectedDateKey}T00:00:00`).getTime())}`
     : 'Зміни за місяць';
   salaryEmpty.hidden = dayShifts.length > 0;
-  salaryEmpty.textContent = salaryState.selectedDateKey
+  salaryEmpty.textContent = range
+    ? 'За цей період записів немає.'
+    : salaryState.selectedDateKey
     ? 'За цей день записів немає.'
     : 'За цей місяць записів немає.';
   salaryList.innerHTML = '';
 
   dayShifts.forEach((shift) => {
     const item = document.createElement('li');
-    const totalText = document.createElement('strong');
-    const dates = document.createElement('span');
-    const details = document.createElement('span');
+    const header = document.createElement('div');
+    const titleGroup = document.createElement('div');
+    const dateText = document.createElement('span');
+    const typeBadge = document.createElement('span');
+    const amount = document.createElement('strong');
+    const meta = document.createElement('div');
+    const timeText = document.createElement('span');
+    const durationText = document.createElement('span');
+    const rateText = document.createElement('span');
+    const shiftType = shift.shiftType || detectShiftType(shift.startedAt);
+    const multiplier = normalizeRateMultiplier(shift.rateMultiplier ?? (shift.doubleRate ? 2 : 1));
 
-    totalText.textContent = `${formatMoney(calculatePay(shift))} · ${formatDuration(shift.endedAt - shift.startedAt)}`;
-    dates.textContent = `${formatDateTime(shift.startedAt)} - ${formatDateTime(shift.endedAt)}`;
-    details.textContent = `${shift.shiftType || detectShiftType(shift.startedAt)} · ${formatPayDetails(shift)}`;
+    item.className = [
+      'history-card',
+      'salary-history-card',
+      shiftType === '2 зміна' ? 'shift-second-card' : 'shift-first-card'
+    ].join(' ');
+    header.className = 'history-card-header';
+    titleGroup.className = 'history-title-group';
+    dateText.className = 'history-date';
+    typeBadge.className = 'history-badge';
+    amount.className = 'history-amount';
+    meta.className = 'history-meta';
 
-    item.append(totalText, dates, details);
+    dateText.textContent = formatDateOnly(shift.startedAt);
+    typeBadge.textContent = shiftType;
+    typeBadge.classList.add(shiftType === '2 зміна' ? 'second-shift' : 'first-shift');
+    amount.textContent = formatMoney(calculatePay(shift));
+    timeText.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8v5l3 2"></path><circle cx="12" cy="12" r="9"></circle></svg><span>${formatTimeOnly(shift.startedAt)} - ${formatTimeOnly(shift.endedAt)}</span>`;
+    durationText.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h18"></path><path d="M7 8l-4 4 4 4"></path><path d="M17 8l4 4-4 4"></path></svg><span>${formatHoursMinutes(shift.endedAt - shift.startedAt)}</span>`;
+    rateText.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2v20"></path><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7H14a3.5 3.5 0 0 1 0 7H6"></path></svg><span>${multiplier === 1 ? formatRate(shift.rate) : `${formatRate(shift.rate)} · x${multiplier}`}</span>`;
+
+    titleGroup.append(dateText, typeBadge);
+    header.append(titleGroup, amount);
+    meta.append(timeText, durationText, rateText);
+    item.append(header, meta);
     salaryList.append(item);
   });
 }
@@ -1938,6 +1959,7 @@ function setupSalaryPage() {
   const nextMonthBtn = document.getElementById('salaryNextMonthBtn');
   const todayBtn = document.getElementById('salaryTodayBtn');
   const monthBtn = document.getElementById('salaryMonthBtn');
+  const resetRangeBtn = document.getElementById('salaryResetRangeBtn');
   const copyDayReportBtn = document.getElementById('copyDayReportBtn');
   const copyMonthReportBtn = document.getElementById('copyMonthReportBtn');
   if (!prevMonthBtn || !nextMonthBtn || !todayBtn || !monthBtn) return;
@@ -1963,6 +1985,8 @@ function setupSalaryPage() {
   todayBtn.addEventListener('click', () => {
     const today = new Date();
     salaryState.selectedDateKey = getDateKey(today);
+    salaryState.rangeStartKey = salaryState.selectedDateKey;
+    salaryState.rangeEndKey = salaryState.selectedDateKey;
     salaryState.visibleMonth = new Date(today.getFullYear(), today.getMonth(), 1);
     renderSalaryCalendar();
     renderSalaryList();
@@ -1970,24 +1994,41 @@ function setupSalaryPage() {
 
   monthBtn.addEventListener('click', () => {
     salaryState.selectedDateKey = null;
+    clearRange(salaryState);
+    renderSalaryCalendar();
+    renderSalaryList();
+  });
+
+  resetRangeBtn?.addEventListener('click', () => {
+    salaryState.selectedDateKey = null;
+    clearRange(salaryState);
     renderSalaryCalendar();
     renderSalaryList();
   });
 
   copyDayReportBtn?.addEventListener('click', () => {
-    if (!salaryState.selectedDateKey) {
+    const range = getRangeKeys(salaryState);
+    if (!salaryState.selectedDateKey && !range) {
       showToast('Оберіть день у календарі', 'info');
       return;
     }
 
-    const dayShifts = storage.shifts.filter((shift) => getDateKey(shift.startedAt) === salaryState.selectedDateKey);
-    const title = `Звіт за ${formatDateOnly(new Date(`${salaryState.selectedDateKey}T00:00:00`).getTime())}`;
-    copyText(getReportText(dayShifts, title), 'Звіт дня скопійовано');
+    const dayShifts = range
+      ? filterShiftsByRange(storage.shifts, salaryState)
+      : storage.shifts.filter((shift) => getDateKey(shift.startedAt) === salaryState.selectedDateKey);
+    const title = range
+      ? `Звіт за ${getRangeLabel(salaryState)}`
+      : `Звіт за ${formatDateOnly(new Date(`${salaryState.selectedDateKey}T00:00:00`).getTime())}`;
+    copyText(getReportText(dayShifts, title), range ? 'Звіт періоду скопійовано' : 'Звіт дня скопійовано');
   });
 
   copyMonthReportBtn?.addEventListener('click', () => {
-    const monthShifts = getMonthShifts(salaryState.visibleMonth);
-    copyText(getReportText(monthShifts, `Звіт за ${formatMonth(salaryState.visibleMonth)}`), 'Звіт місяця скопійовано');
+    const range = getRangeKeys(salaryState);
+    const monthShifts = range ? filterShiftsByRange(storage.shifts, salaryState) : getMonthShifts(salaryState.visibleMonth);
+    copyText(
+      getReportText(monthShifts, range ? `Звіт за ${getRangeLabel(salaryState)}` : `Звіт за ${formatMonth(salaryState.visibleMonth)}`),
+      range ? 'Звіт періоду скопійовано' : 'Звіт місяця скопійовано'
+    );
   });
 
   renderSalaryCalendar();
@@ -2019,29 +2060,75 @@ function renderAnalyticsList(list, entries, emptyText) {
   entries.forEach(([label, value]) => appendAnalyticsItem(list, label, value));
 }
 
+function renderAnalyticsCalendar() {
+  const calendarGrid = document.getElementById('analyticsCalendarGrid');
+  const monthTitle = document.getElementById('analyticsMonthTitle');
+  if (!calendarGrid || !monthTitle) return;
+
+  const month = analyticsState.visibleMonth;
+  const shiftDates = new Set(getMonthShifts(month).map((shift) => getDateKey(shift.startedAt)));
+  const year = month.getFullYear();
+  const monthIndex = month.getMonth();
+  const firstDay = new Date(year, monthIndex, 1);
+  const startOffset = (firstDay.getDay() + 6) % 7;
+  const gridStart = new Date(year, monthIndex, 1 - startOffset);
+  const todayKey = getDateKey(new Date());
+
+  monthTitle.textContent = getRangeLabel(analyticsState) || formatMonth(month);
+  calendarGrid.innerHTML = '';
+
+  for (let index = 0; index < 42; index += 1) {
+    const date = new Date(gridStart);
+    date.setDate(gridStart.getDate() + index);
+
+    const dateKey = getDateKey(date);
+    const button = document.createElement('button');
+    button.className = 'calendar-day';
+    button.type = 'button';
+    button.textContent = String(date.getDate());
+    button.setAttribute('aria-label', formatDateOnly(date.getTime()));
+
+    if (date.getMonth() !== monthIndex) {
+      button.classList.add('outside');
+    }
+    if (dateKey === todayKey) {
+      button.classList.add('today');
+    }
+    if (shiftDates.has(dateKey)) {
+      button.classList.add('has-shifts');
+    }
+    applyCalendarDayRangeClasses(button, dateKey, analyticsState);
+
+    button.addEventListener('click', () => {
+      setRangeDate(analyticsState, dateKey);
+      analyticsState.visibleMonth = new Date(date.getFullYear(), date.getMonth(), 1);
+      renderAnalyticsCalendar();
+      renderAnalytics();
+    });
+
+    calendarGrid.append(button);
+  }
+}
+
 function renderAnalytics() {
   const monthTitle = document.getElementById('analyticsMonthTitle');
   const totalPayEl = document.getElementById('analyticsTotalPay');
   const totalHoursEl = document.getElementById('analyticsTotalHours');
   const shiftCountEl = document.getElementById('analyticsShiftCount');
   const averagePayEl = document.getElementById('analyticsAveragePay');
-  const breakTotalEl = document.getElementById('analyticsBreakTotal');
-  const breakAverageEl = document.getElementById('analyticsBreakAverage');
   const chart = document.getElementById('analyticsChart');
   const empty = document.getElementById('analyticsEmpty');
   const shiftTypesList = document.getElementById('analyticsShiftTypes');
   const multipliersList = document.getElementById('analyticsMultipliers');
   const topDaysList = document.getElementById('analyticsTopDays');
-  const topBreakDaysList = document.getElementById('analyticsTopBreakDays');
   if (!monthTitle || !totalPayEl || !totalHoursEl || !shiftCountEl || !averagePayEl || !chart) return;
 
   const month = analyticsState.visibleMonth;
-  const monthShifts = getMonthShifts(month);
+  const range = getRangeKeys(analyticsState);
+  const monthShifts = range ? filterShiftsByRange(storage.shifts, analyticsState) : getMonthShifts(month);
   const totalPay = monthShifts.reduce((sum, shift) => sum + calculatePay(shift), 0);
   const totalMs = monthShifts.reduce((sum, shift) => sum + Math.max(0, shift.endedAt - shift.startedAt), 0);
-  const totalBreakMs = monthShifts.reduce((sum, shift) => sum + getBreaksDurationMs(shift.breaks), 0);
   const averagePay = monthShifts.length > 0 ? totalPay / monthShifts.length : 0;
-  const averageBreakMs = monthShifts.length > 0 ? totalBreakMs / monthShifts.length : 0;
   const shiftTypes = new Map();
   const multipliers = new Map([
     ['x1', 0],
@@ -2055,7 +2142,6 @@ function renderAnalytics() {
     const multiplier = normalizeRateMultiplier(shift.rateMultiplier ?? (shift.doubleRate ? 2 : 1));
     const dayKey = getDateKey(shift.startedAt);
     const pay = calculatePay(shift);
-    const breaksMs = getBreaksDurationMs(shift.breaks);
     const currentDay = dayStats.get(dayKey) || { pay: 0, ms: 0, count: 0, timestamp: shift.startedAt };
 
     shiftTypes.set(shiftType, (shiftTypes.get(shiftType) || 0) + 1);
@@ -2063,33 +2149,39 @@ function renderAnalytics() {
     dayStats.set(dayKey, {
       pay: currentDay.pay + pay,
       ms: currentDay.ms + Math.max(0, shift.endedAt - shift.startedAt),
-      breaksMs: (currentDay.breaksMs || 0) + breaksMs,
       count: currentDay.count + 1,
       timestamp: currentDay.timestamp
     });
   });
 
-  monthTitle.textContent = formatMonth(month);
+  monthTitle.textContent = getRangeLabel(analyticsState) || formatMonth(month);
   totalPayEl.textContent = formatMoney(totalPay);
   totalHoursEl.textContent = formatHoursMinutes(totalMs);
   shiftCountEl.textContent = String(monthShifts.length);
   averagePayEl.textContent = formatMoney(averagePay);
-  if (breakTotalEl) {
-    breakTotalEl.textContent = formatHoursMinutes(totalBreakMs);
-  }
-  if (breakAverageEl) {
-    breakAverageEl.textContent = formatHoursMinutes(averageBreakMs);
-  }
   if (empty) {
     empty.hidden = monthShifts.length > 0;
+    empty.textContent = range ? 'За цей період записів немає.' : 'За цей місяць записів немає.';
   }
 
-  const daysInMonth = new Date(month.getFullYear(), month.getMonth() + 1, 0).getDate();
   const maxDayPay = Math.max(1, ...Array.from(dayStats.values()).map((item) => item.pay));
+  const chartDates = [];
+
+  if (range) {
+    const start = new Date(getTimestampFromDateKey(range.startKey));
+    const end = new Date(getTimestampFromDateKey(range.endKey));
+    for (const date = new Date(start); date <= end; date.setDate(date.getDate() + 1)) {
+      chartDates.push(new Date(date));
+    }
+  } else {
+    const daysInMonth = new Date(month.getFullYear(), month.getMonth() + 1, 0).getDate();
+    for (let day = 1; day <= daysInMonth; day += 1) {
+      chartDates.push(new Date(month.getFullYear(), month.getMonth(), day));
+    }
+  }
 
   chart.innerHTML = '';
-  for (let day = 1; day <= daysInMonth; day += 1) {
-    const date = new Date(month.getFullYear(), month.getMonth(), day);
+  chartDates.forEach((date) => {
     const dateKey = getDateKey(date);
     const stats = dayStats.get(dateKey);
     const wrapper = document.createElement('div');
@@ -2102,10 +2194,10 @@ function renderAnalytics() {
     bar.style.height = `${height}px`;
     bar.title = stats ? `${formatDateOnly(date.getTime())}: ${formatMoney(stats.pay)}` : formatDateOnly(date.getTime());
     label.className = 'chart-label';
-    label.textContent = String(day);
+    label.textContent = range ? formatShortDate(date.getTime()) : String(date.getDate());
     wrapper.append(bar, label);
     chart.append(wrapper);
-  }
+  });
 
   renderAnalyticsList(
     shiftTypesList,
@@ -2125,20 +2217,14 @@ function renderAnalytics() {
       .map(([, stats]) => [formatDateOnly(stats.timestamp), `${formatMoney(stats.pay)} · ${stats.count}`]),
     'Днів немає'
   );
-  renderAnalyticsList(
-    topBreakDaysList,
-    Array.from(dayStats.entries())
-      .filter(([, stats]) => (stats.breaksMs || 0) > 0)
-      .sort((first, second) => (second[1].breaksMs || 0) - (first[1].breaksMs || 0))
-      .slice(0, 3)
-      .map(([, stats]) => [formatDateOnly(stats.timestamp), formatHoursMinutes(stats.breaksMs || 0)]),
-    'Перерв немає'
-  );
 }
 
 function setupAnalyticsPage() {
   const prevMonthBtn = document.getElementById('analyticsPrevMonthBtn');
   const nextMonthBtn = document.getElementById('analyticsNextMonthBtn');
+  const todayBtn = document.getElementById('analyticsTodayBtn');
+  const monthBtn = document.getElementById('analyticsMonthBtn');
+  const resetRangeBtn = document.getElementById('analyticsResetRangeBtn');
   if (!prevMonthBtn || !nextMonthBtn) return;
 
   prevMonthBtn.addEventListener('click', () => {
@@ -2147,6 +2233,7 @@ function setupAnalyticsPage() {
       analyticsState.visibleMonth.getMonth() - 1,
       1
     );
+    renderAnalyticsCalendar();
     renderAnalytics();
   });
 
@@ -2156,9 +2243,32 @@ function setupAnalyticsPage() {
       analyticsState.visibleMonth.getMonth() + 1,
       1
     );
+    renderAnalyticsCalendar();
     renderAnalytics();
   });
 
+  todayBtn?.addEventListener('click', () => {
+    const today = new Date();
+    analyticsState.rangeStartKey = getDateKey(today);
+    analyticsState.rangeEndKey = getDateKey(today);
+    analyticsState.visibleMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+    renderAnalyticsCalendar();
+    renderAnalytics();
+  });
+
+  monthBtn?.addEventListener('click', () => {
+    clearRange(analyticsState);
+    renderAnalyticsCalendar();
+    renderAnalytics();
+  });
+
+  resetRangeBtn?.addEventListener('click', () => {
+    clearRange(analyticsState);
+    renderAnalyticsCalendar();
+    renderAnalytics();
+  });
+
+  renderAnalyticsCalendar();
   renderAnalytics();
 }
 
@@ -2221,8 +2331,6 @@ function setupSettingsPage() {
   const rateInput = document.getElementById('rateInput');
   const startHoldInput = document.getElementById('startHoldInput');
   const endHoldInput = document.getElementById('endHoldInput');
-  const addBreakBtn = document.getElementById('addBreakBtn');
-  const breakList = document.getElementById('breakList');
   const saved = document.getElementById('settingsSaved');
   const exportDataBtn = document.getElementById('exportDataBtn');
   const importDataBtn = document.getElementById('importDataBtn');
@@ -2230,9 +2338,6 @@ function setupSettingsPage() {
   if (!rateInput) return;
 
   const settings = storage.settings;
-  if (breakList) {
-    breakList.innerHTML = '';
-  }
   if (surnameInput) {
     surnameInput.value = settings.surname;
   }
@@ -2244,74 +2349,12 @@ function setupSettingsPage() {
     endHoldInput.value = settings.endHoldSeconds;
   }
 
-  function addBreakRow(breakItem = null) {
-    if (!breakList) return;
-
-    const row = document.createElement('div');
-    const startLabel = document.createElement('label');
-    const endLabel = document.createElement('label');
-    const startInput = document.createElement('input');
-    const endInput = document.createElement('input');
-    const removeButton = document.createElement('button');
-
-    row.className = 'break-row';
-    startInput.type = 'text';
-    startInput.placeholder = '10:00';
-    endInput.type = 'text';
-    endInput.placeholder = '10:15';
-    setupPickerInput(startInput, 'time');
-    setupPickerInput(endInput, 'time');
-    removeButton.className = 'small-action danger-action';
-    removeButton.type = 'button';
-    removeButton.textContent = 'Видалити';
-
-    if (breakItem) {
-      startInput.value = breakItem.startedAt;
-      endInput.value = breakItem.endedAt;
-    }
-
-    startInput.addEventListener('change', saveSettings);
-    endInput.addEventListener('change', saveSettings);
-    removeButton.addEventListener('click', () => {
-      row.remove();
-      saveSettings();
-    });
-
-    startLabel.append('З', startInput);
-    endLabel.append('По', endInput);
-    row.append(startLabel, endLabel, removeButton);
-    breakList.append(row);
-  }
-
-  settings.breaks.forEach((breakItem) => addBreakRow(breakItem));
-
-  function readBreakRows() {
-    if (!breakList) return [];
-
-    return Array.from(breakList.querySelectorAll('.break-row')).map((row) => {
-      const inputs = row.querySelectorAll('input');
-      return {
-        startedAt: inputs[0]?.value || '',
-        endedAt: inputs[1]?.value || ''
-      };
-    });
-  }
-
   function saveSettings() {
-    const nextBreaks = validateBreaks(readBreakRows());
-    if (!nextBreaks) {
-      if (saved) {
-        saved.textContent = 'Перевірте перерви';
-      }
-      return;
-    }
-
     storage.settings = {
       rate: Number(rateInput.value) || 0,
       startHoldSeconds: clampHoldSeconds(startHoldInput?.value, defaultSettings.startHoldSeconds),
       endHoldSeconds: clampHoldSeconds(endHoldInput?.value, defaultSettings.endHoldSeconds),
-      surname: surnameInput?.value || '',
-      breaks: nextBreaks
+      surname: surnameInput?.value || ''
     };
 
     const nextSettings = storage.settings;
@@ -2331,9 +2374,6 @@ function setupSettingsPage() {
   rateInput.addEventListener('input', saveSettings);
   startHoldInput?.addEventListener('change', saveSettings);
   endHoldInput?.addEventListener('change', saveSettings);
-  addBreakBtn?.addEventListener('click', () => {
-    addBreakRow();
-  });
   exportDataBtn?.addEventListener('click', exportBackup);
   importDataBtn?.addEventListener('click', () => {
     importDataInput?.click();

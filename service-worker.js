@@ -1,4 +1,4 @@
-const CACHE_NAME = 'shifter-v1';
+const CACHE_NAME = 'shifter-v2';
 const APP_SHELL = [
   './',
   './index.html',
@@ -6,8 +6,8 @@ const APP_SHELL = [
   './salary.html',
   './analytics.html',
   './settings.html',
-  './style.css',
-  './app.js',
+  './style.css?v=9',
+  './app.js?v=9',
   './manifest.json',
   './icon.svg'
 ];
