@@ -39,6 +39,7 @@ function AnalyticsList({ entries, emptyText }: { entries: Array<[string, string]
 export function AnalyticsPage() {
   const { shifts } = useSnapshot();
   const [visibleMonth, setVisibleMonth] = useState(() => new Date(new Date().getFullYear(), new Date().getMonth(), 1));
+  const [selectedDateKey, setSelectedDateKey] = useState<string | null>(null);
   const [rangeState, setRangeState] = useState(clearRangeState);
   const range = getRangeKeys(rangeState);
   const monthShifts = range ? filterShiftsByRange(shifts, rangeState) : getMonthShifts(shifts, visibleMonth);
@@ -95,6 +96,7 @@ export function AnalyticsPage() {
 
   function selectToday() {
     const selection = getTodayCalendarSelection();
+    setSelectedDateKey(selection.selectedDateKey);
     setRangeState(selection.rangeState);
     setVisibleMonth(selection.visibleMonth);
   }
@@ -108,11 +110,16 @@ export function AnalyticsPage() {
       <CalendarPanel
         visibleMonth={visibleMonth}
         title={title}
+        selectedDateKey={selectedDateKey}
         rangeState={rangeState}
         shiftDateKeys={shiftDateKeys}
         ariaLabel="Календар аналітики"
-        onMonthChange={setVisibleMonth}
+        onMonthChange={(month) => {
+          setVisibleMonth(month);
+          setSelectedDateKey(null);
+        }}
         onDateClick={(date, dateKey) => {
+          setSelectedDateKey(dateKey);
           setRangeState((current) => getNextRangeState(current, dateKey));
           setVisibleMonth(new Date(date.getFullYear(), date.getMonth(), 1));
         }}
@@ -121,24 +128,36 @@ export function AnalyticsPage() {
             label: 'Сьогодні',
             onClick: selectToday
           },
-          { label: 'Місяць', onClick: () => setRangeState(clearRangeState()) },
-          { label: 'Скинути', onClick: () => setRangeState(clearRangeState()) }
+          {
+            label: 'Місяць',
+            onClick: () => {
+              setSelectedDateKey(null);
+              setRangeState(clearRangeState());
+            }
+          },
+          {
+            label: 'Скинути',
+            onClick: () => {
+              setSelectedDateKey(null);
+              setRangeState(clearRangeState());
+            }
+          }
         ]}
       />
-      <section className="panel analytics-summary" aria-label="Підсумки місяця">
-        <div className="metric">
+      <section className="panel dashboard-summary analytics-summary" aria-label="Підсумки місяця">
+        <div className="summary-metric">
           <span>Сума</span>
           <strong>{formatMoney(totalPay)}</strong>
         </div>
-        <div className="metric">
+        <div className="summary-metric">
           <span>Години</span>
           <strong>{formatHoursMinutes(totalMs)}</strong>
         </div>
-        <div className="metric">
+        <div className="summary-metric">
           <span>Зміни</span>
           <strong>{monthShifts.length}</strong>
         </div>
-        <div className="metric">
+        <div className="summary-metric">
           <span>Середня</span>
           <strong>{formatMoney(averagePay)}</strong>
         </div>
@@ -173,8 +192,8 @@ export function AnalyticsPage() {
           {range ? 'За цей період записів немає.' : 'За цей місяць записів немає.'}
         </p>
       </section>
-      <section className="panel analytics-lists">
-        <div>
+      <section className="panel dashboard-lists analytics-lists">
+        <div className="dashboard-list-section">
           <h2>Типи змін</h2>
           <AnalyticsList
             entries={Array.from(shiftTypes.entries())
@@ -183,14 +202,14 @@ export function AnalyticsPage() {
             emptyText="Змін немає"
           />
         </div>
-        <div>
+        <div className="dashboard-list-section">
           <h2>Коефіцієнти</h2>
           <AnalyticsList
             entries={Array.from(multipliers.entries()).map(([label, count]) => [label, String(count)])}
             emptyText="Коефіцієнтів немає"
           />
         </div>
-        <div>
+        <div className="dashboard-list-section">
           <h2>Найкращі дні</h2>
           <AnalyticsList
             entries={Array.from(dayStats.entries())

@@ -8,11 +8,12 @@ import {
   normalizeShiftType
 } from '../../entities/shift/model';
 import type { ActiveShift, RateMultiplier, Shift, ShiftType } from '../../entities/shift/types';
-import { formatDateTimeInput, getTimestampFromDateTimeInput } from '../../shared/lib/format';
+import { formatDateOnly, formatMonth } from '../../shared/lib/format';
 import { normalizeNonNegativeNumber } from '../../shared/lib/number';
 import { storage } from '../../shared/storage/local-storage';
 import { useStore } from '../../app/providers/store-provider';
 import { useToast } from '../../widgets/toast/toast-provider';
+import { CalendarGrid } from '../../widgets/calendar/calendar-grid';
 
 interface EditShiftFormProps {
   shift: Shift | ActiveShift;
@@ -38,6 +39,56 @@ export function getDefaultNewShift(selectedDateKey: string | null, rate: number)
     rateMultiplier: 1,
     doubleRate: false
   };
+}
+
+export function formatTimeInput(timestamp: number): string {
+  const date = new Date(timestamp);
+  return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+}
+
+export function parseTimeToMinutes(value: string): number | null {
+  const match = String(value || '')
+    .trim()
+    .match(/^(\d{1,2}):(\d{2})$/);
+  if (!match) return null;
+
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  if (
+    !Number.isInteger(hours) ||
+    !Number.isInteger(minutes) ||
+    hours < 0 ||
+    hours > 23 ||
+    minutes < 0 ||
+    minutes > 59
+  ) {
+    return null;
+  }
+
+  return hours * 60 + minutes;
+}
+
+export function getTimestampFromDateAndTime(dateKey: string, timeValue: string): number | null {
+  const [year, month, day] = String(dateKey || '')
+    .split('-')
+    .map(Number);
+  const minutesFromDayStart = parseTimeToMinutes(timeValue);
+  if (minutesFromDayStart === null) return null;
+
+  const date = new Date(year, month - 1, day);
+  if (
+    !Number.isInteger(year) ||
+    !Number.isInteger(month) ||
+    !Number.isInteger(day) ||
+    date.getFullYear() !== year ||
+    date.getMonth() !== month - 1 ||
+    date.getDate() !== day
+  ) {
+    return null;
+  }
+
+  date.setHours(Math.floor(minutesFromDayStart / 60), minutesFromDayStart % 60, 0, 0);
+  return date.getTime();
 }
 
 export function saveActiveShiftValue(
@@ -66,8 +117,14 @@ export function EditShiftForm({ shift, mode = 'edit', onCancel, onSaved }: EditS
   const isCreate = mode === 'create';
   const { refresh } = useStore();
   const { showToast } = useToast();
-  const [startedValue, setStartedValue] = useState(formatDateTimeInput(shift.startedAt));
-  const [endedValue, setEndedValue] = useState(formatDateTimeInput(shift.endedAt));
+  const [dateKey, setDateKey] = useState(getDateKey(shift.startedAt));
+  const [visibleMonth, setVisibleMonth] = useState(() => {
+    const date = new Date(shift.startedAt);
+    return new Date(date.getFullYear(), date.getMonth(), 1);
+  });
+  const [datePickerOpen, setDatePickerOpen] = useState(isCreate);
+  const [startedTime, setStartedTime] = useState(formatTimeInput(shift.startedAt));
+  const [endedTime, setEndedTime] = useState(formatTimeInput(shift.endedAt));
   const [rate, setRate] = useState(String(Number(shift.rate) || 0));
   const [shiftType, setShiftType] = useState<ShiftType>(normalizeShiftType(shift.shiftType, shift.startedAt));
   const [rateMultiplier, setRateMultiplier] = useState<RateMultiplier>(normalizeRateMultiplier(shift.rateMultiplier));
@@ -78,8 +135,8 @@ export function EditShiftForm({ shift, mode = 'edit', onCancel, onSaved }: EditS
     event.preventDefault();
     setError('');
 
-    const startedAt = getTimestampFromDateTimeInput(startedValue);
-    const endedAt = isActive ? Date.now() : getTimestampFromDateTimeInput(endedValue);
+    const startedAt = getTimestampFromDateAndTime(dateKey, startedTime);
+    const endedAt = isActive ? Date.now() : getTimestampFromDateAndTime(dateKey, endedTime);
 
     if (!startedAt || !endedAt || endedAt < startedAt || (isActive && startedAt > Date.now())) {
       setError(isActive ? 'Перевірте час приходу.' : 'Перевірте час приходу та виходу.');
@@ -123,29 +180,76 @@ export function EditShiftForm({ shift, mode = 'edit', onCancel, onSaved }: EditS
   }
 
   return (
-    <form className="edit-form" onSubmit={submit}>
-      <label>
-        Прихід
-        <input
-          value={startedValue}
-          onChange={(event) => setStartedValue(event.target.value)}
-          type="text"
-          required
-          placeholder="2026-06-14 06:30"
-        />
-      </label>
-      {!isActive && (
+    <form className={`edit-form ${isCreate ? 'create-shift-form' : ''}`} onSubmit={submit}>
+      {isCreate && (
+        <div className="edit-form-heading">
+          <strong>Нова зміна</strong>
+          <span>Оберіть дату, часи, ставку і коефіцієнт.</span>
+        </div>
+      )}
+      <div className="shift-date-control">
+        <span>Дата</span>
+        <button className="date-picker-button" type="button" onClick={() => setDatePickerOpen((value) => !value)}>
+          {formatDateOnly(getTimestampFromDateAndTime(dateKey, startedTime) || shift.startedAt)}
+        </button>
+        {datePickerOpen && (
+          <div className="inline-date-picker">
+            <div className="calendar-header">
+              <button
+                className="calendar-nav"
+                type="button"
+                aria-label="Попередній місяць"
+                onClick={() => setVisibleMonth(new Date(visibleMonth.getFullYear(), visibleMonth.getMonth() - 1, 1))}
+              >
+                ‹
+              </button>
+              <h2>{formatMonth(visibleMonth)}</h2>
+              <button
+                className="calendar-nav"
+                type="button"
+                aria-label="Наступний місяць"
+                onClick={() => setVisibleMonth(new Date(visibleMonth.getFullYear(), visibleMonth.getMonth() + 1, 1))}
+              >
+                ›
+              </button>
+            </div>
+            <CalendarGrid
+              visibleMonth={visibleMonth}
+              selectedDateKey={dateKey}
+              ariaLabel="Календар дати зміни"
+              onDateClick={(date, nextDateKey) => {
+                setDateKey(nextDateKey);
+                setVisibleMonth(new Date(date.getFullYear(), date.getMonth(), 1));
+                setDatePickerOpen(false);
+              }}
+            />
+          </div>
+        )}
+      </div>
+      <div className="time-grid">
         <label>
-          Вихід
+          Прихід
           <input
-            value={endedValue}
-            onChange={(event) => setEndedValue(event.target.value)}
-            type="text"
+            value={startedTime}
+            onChange={(event) => setStartedTime(event.target.value)}
+            type="time"
             required
-            placeholder="2026-06-14 14:30"
+            inputMode="numeric"
           />
         </label>
-      )}
+        {!isActive && (
+          <label>
+            Вихід
+            <input
+              value={endedTime}
+              onChange={(event) => setEndedTime(event.target.value)}
+              type="time"
+              required
+              inputMode="numeric"
+            />
+          </label>
+        )}
+      </div>
       {!isActive && (
         <div className="shift-type-control">
           <span>Тип зміни</span>

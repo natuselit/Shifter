@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ActiveShift } from '../../entities/shift/types';
 import { storage } from '../../shared/storage/local-storage';
-import { saveActiveShiftValue } from './edit-shift-form';
+import { getTimestampFromDateAndTime, parseTimeToMinutes, saveActiveShiftValue } from './edit-shift-form';
 
 function installLocalStorage() {
   const values = new Map<string, string>();
@@ -45,5 +45,27 @@ describe('edit active shift', () => {
       rateMultiplier: 1.5,
       doubleRate: false
     });
+  });
+});
+
+describe('shift date and time helpers', () => {
+  it('parses valid time values', () => {
+    expect(parseTimeToMinutes('06:30')).toBe(390);
+    expect(parseTimeToMinutes('6:05')).toBe(365);
+  });
+
+  it('rejects invalid time values', () => {
+    expect(parseTimeToMinutes('24:00')).toBeNull();
+    expect(parseTimeToMinutes('12:99')).toBeNull();
+    expect(parseTimeToMinutes('bad')).toBeNull();
+  });
+
+  it('creates timestamp from selected date and time', () => {
+    expect(getTimestampFromDateAndTime('2026-06-16', '14:30')).toBe(new Date(2026, 5, 16, 14, 30).getTime());
+  });
+
+  it('rejects invalid date and time combinations', () => {
+    expect(getTimestampFromDateAndTime('2026-02-31', '14:30')).toBeNull();
+    expect(getTimestampFromDateAndTime('2026-06-16', '99:30')).toBeNull();
   });
 });

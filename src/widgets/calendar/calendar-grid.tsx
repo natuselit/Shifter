@@ -15,7 +15,6 @@ interface CalendarGridProps {
   shiftDateKeys?: Set<string>;
   titleId?: string;
   ariaLabel: string;
-  salaryMode?: boolean;
   onDateClick: (date: Date, dateKey: string) => void;
 }
 
@@ -37,14 +36,13 @@ function getRangeClasses(dateKey: string, state?: RangeState) {
   return `${inRange ? ' in-range' : ''}${edge ? ' range-edge' : ''}`;
 }
 
-function CalendarGrid({
+export function CalendarGrid({
   visibleMonth,
   selectedDateKey,
   rangeState,
   shiftDateKeys = new Set<string>(),
   titleId,
   ariaLabel,
-  salaryMode = false,
   onDateClick
 }: CalendarGridProps) {
   const year = visibleMonth.getFullYear();
@@ -76,7 +74,6 @@ function CalendarGrid({
           const dateKey = getDateKey(date);
           const className = [
             'calendar-day',
-            salaryMode ? 'salary-day' : '',
             date.getMonth() !== monthIndex ? 'outside' : '',
             dateKey === todayKey ? 'today' : '',
             dateKey === selectedDateKey ? 'selected' : '',
@@ -94,7 +91,7 @@ function CalendarGrid({
               aria-label={formatDateOnly(date.getTime())}
               onClick={() => onDateClick(date, dateKey)}
             >
-              {salaryMode ? <span>{date.getDate()}</span> : date.getDate()}
+              {date.getDate()}
             </button>
           );
         })}
@@ -110,7 +107,6 @@ export function CalendarPanel({
   shiftDateKeys,
   title,
   ariaLabel,
-  salaryMode,
   actions = [],
   secondaryActions = [],
   children,
@@ -144,7 +140,6 @@ export function CalendarPanel({
         rangeState={rangeState}
         shiftDateKeys={shiftDateKeys}
         ariaLabel={ariaLabel}
-        salaryMode={salaryMode}
         onDateClick={onDateClick}
       />
       {actions.length > 0 && (

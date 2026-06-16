@@ -187,6 +187,22 @@ export function HistoryPage() {
           ))}
         </div>
       </CalendarPanel>
+      {creatingShift && (
+        <section className="panel create-shift-panel">
+          <EditShiftForm
+            mode="create"
+            shift={getDefaultNewShift(selectedDateKey, settings.rate)}
+            onCancel={() => setCreatingShift(false)}
+            onSaved={(shift) => {
+              setCreatingShift(false);
+              setSelectedDateKey(getDateKey(shift.startedAt));
+              setVisibleMonth(
+                new Date(new Date(shift.startedAt).getFullYear(), new Date(shift.startedAt).getMonth(), 1)
+              );
+            }}
+          />
+        </section>
+      )}
       <section className="panel">
         <div className="section-header">
           <h2>{fullTitle}</h2>
@@ -208,24 +224,6 @@ export function HistoryPage() {
           </div>
         </div>
         <ul className="history">
-          {creatingShift && (
-            <li className="create-history-item">
-              <strong>Нова зміна</strong>
-              <span>Заповніть час, тип зміни, ставку і коефіцієнт.</span>
-              <EditShiftForm
-                mode="create"
-                shift={getDefaultNewShift(selectedDateKey, settings.rate)}
-                onCancel={() => setCreatingShift(false)}
-                onSaved={(shift) => {
-                  setCreatingShift(false);
-                  setSelectedDateKey(getDateKey(shift.startedAt));
-                  setVisibleMonth(
-                    new Date(new Date(shift.startedAt).getFullYear(), new Date(shift.startedAt).getMonth(), 1)
-                  );
-                }}
-              />
-            </li>
-          )}
           {filteredShifts.map((shift) => (
             <ShiftCard
               key={shift.id}
@@ -258,7 +256,7 @@ export function HistoryPage() {
             </ShiftCard>
           ))}
         </ul>
-        <p className="empty" hidden={filteredShifts.length > 0 || creatingShift}>
+        <p className="empty" hidden={filteredShifts.length > 0}>
           {range
             ? 'За цей період і фільтр записів немає.'
             : selectedDateKey

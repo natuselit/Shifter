@@ -91,12 +91,12 @@ export function SalaryPage() {
         <p className="eyebrow">Підсумки оплат</p>
         <h1>Зарплата</h1>
       </header>
-      <section className="panel salary-summary">
-        <div className="metric">
+      <section className="panel dashboard-summary salary-summary">
+        <div className="summary-metric">
           <span>За місяць/період</span>
           <strong>{formatMoney(monthTotal)}</strong>
         </div>
-        <div className="metric">
+        <div className="summary-metric">
           <span>Обрано</span>
           <strong>{formatMoney(selectedTotal)}</strong>
         </div>
@@ -107,7 +107,6 @@ export function SalaryPage() {
         rangeState={rangeState}
         shiftDateKeys={shiftDateKeys}
         ariaLabel="Календар зарплати"
-        salaryMode
         onMonthChange={setVisibleMonth}
         onDateClick={chooseDate}
         actions={[
