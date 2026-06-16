@@ -1,7 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ActiveShift } from '../../entities/shift/types';
 import { storage } from '../../shared/storage/local-storage';
-import { getTimestampFromDateAndTime, parseTimeToMinutes, saveActiveShiftValue } from './edit-shift-form';
+import {
+  formatTimeInput,
+  getTimestampFromDateAndTime,
+  parseTimeToMinutes,
+  saveActiveShiftValue
+} from './edit-shift-form';
 
 function installLocalStorage() {
   const values = new Map<string, string>();
@@ -49,6 +54,10 @@ describe('edit active shift', () => {
 });
 
 describe('shift date and time helpers', () => {
+  it('formats timestamps as HH:mm', () => {
+    expect(formatTimeInput(new Date(2026, 5, 15, 6, 5).getTime())).toBe('06:05');
+  });
+
   it('parses valid time values', () => {
     expect(parseTimeToMinutes('06:30')).toBe(390);
     expect(parseTimeToMinutes('6:05')).toBe(365);

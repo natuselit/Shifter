@@ -8,7 +8,7 @@ import {
   normalizeShiftType
 } from '../../entities/shift/model';
 import type { ActiveShift, RateMultiplier, Shift, ShiftType } from '../../entities/shift/types';
-import { formatDateOnly, formatMonth } from '../../shared/lib/format';
+import { formatMonth } from '../../shared/lib/format';
 import { normalizeNonNegativeNumber } from '../../shared/lib/number';
 import { storage } from '../../shared/storage/local-storage';
 import { useStore } from '../../app/providers/store-provider';
@@ -91,6 +91,19 @@ export function getTimestampFromDateAndTime(dateKey: string, timeValue: string):
   return date.getTime();
 }
 
+function getTimeParts(value: string): { hours: string; minutes: string } {
+  const minutesFromDayStart = parseTimeToMinutes(value) ?? 0;
+  return {
+    hours: String(Math.floor(minutesFromDayStart / 60)).padStart(2, '0'),
+    minutes: String(minutesFromDayStart % 60).padStart(2, '0')
+  };
+}
+
+function setTimePart(value: string, part: 'hours' | 'minutes', nextValue: string): string {
+  const current = getTimeParts(value);
+  return part === 'hours' ? `${nextValue}:${current.minutes}` : `${current.hours}:${nextValue}`;
+}
+
 export function saveActiveShiftValue(
   shift: ActiveShift,
   startedAt: number,
@@ -122,14 +135,63 @@ export function EditShiftForm({ shift, mode = 'edit', onCancel, onSaved }: EditS
     const date = new Date(shift.startedAt);
     return new Date(date.getFullYear(), date.getMonth(), 1);
   });
-  const [datePickerOpen, setDatePickerOpen] = useState(isCreate);
   const [startedTime, setStartedTime] = useState(formatTimeInput(shift.startedAt));
   const [endedTime, setEndedTime] = useState(formatTimeInput(shift.endedAt));
+  const [openTimePicker, setOpenTimePicker] = useState<'start' | 'end' | null>(null);
   const [rate, setRate] = useState(String(Number(shift.rate) || 0));
   const [shiftType, setShiftType] = useState<ShiftType>(normalizeShiftType(shift.shiftType, shift.startedAt));
   const [rateMultiplier, setRateMultiplier] = useState<RateMultiplier>(normalizeRateMultiplier(shift.rateMultiplier));
   const [error, setError] = useState('');
   const inputName = useMemo(() => `shiftType-${createShiftId()}`, []);
+  const multiplierInputName = useMemo(() => `rateMultiplier-${createShiftId()}`, []);
+  const hourOptions = useMemo(() => Array.from({ length: 24 }, (_, hour) => String(hour).padStart(2, '0')), []);
+  const minuteOptions = useMemo(() => Array.from({ length: 12 }, (_, index) => String(index * 5).padStart(2, '0')), []);
+
+  function renderTimePicker(label: string, value: string, picker: 'start' | 'end', onChange: (value: string) => void) {
+    const parts = getTimeParts(value);
+
+    return (
+      <div className="time-picker-field">
+        <span>{label}</span>
+        <button
+          className="time-picker-button"
+          type="button"
+          aria-expanded={openTimePicker === picker}
+          onClick={() => setOpenTimePicker((current) => (current === picker ? null : picker))}
+        >
+          {value}
+        </button>
+        {openTimePicker === picker && (
+          <div className="time-picker-panel">
+            <div className="time-picker-column" aria-label={`${label}: години`}>
+              {hourOptions.map((hour) => (
+                <button
+                  key={hour}
+                  className={`time-option ${parts.hours === hour ? 'selected' : ''}`}
+                  type="button"
+                  onClick={() => onChange(setTimePart(value, 'hours', hour))}
+                >
+                  {hour}
+                </button>
+              ))}
+            </div>
+            <div className="time-picker-column" aria-label={`${label}: хвилини`}>
+              {minuteOptions.map((minutes) => (
+                <button
+                  key={minutes}
+                  className={`time-option ${parts.minutes === minutes ? 'selected' : ''}`}
+                  type="button"
+                  onClick={() => onChange(setTimePart(value, 'minutes', minutes))}
+                >
+                  {minutes}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
 
   function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -184,71 +246,44 @@ export function EditShiftForm({ shift, mode = 'edit', onCancel, onSaved }: EditS
       {isCreate && (
         <div className="edit-form-heading">
           <strong>Нова зміна</strong>
-          <span>Оберіть дату, часи, ставку і коефіцієнт.</span>
+          <span>Оберіть день у календарі, часи, ставку і коефіцієнт.</span>
         </div>
       )}
       <div className="shift-date-control">
-        <span>Дата</span>
-        <button className="date-picker-button" type="button" onClick={() => setDatePickerOpen((value) => !value)}>
-          {formatDateOnly(getTimestampFromDateAndTime(dateKey, startedTime) || shift.startedAt)}
-        </button>
-        {datePickerOpen && (
-          <div className="inline-date-picker">
-            <div className="calendar-header">
-              <button
-                className="calendar-nav"
-                type="button"
-                aria-label="Попередній місяць"
-                onClick={() => setVisibleMonth(new Date(visibleMonth.getFullYear(), visibleMonth.getMonth() - 1, 1))}
-              >
-                ‹
-              </button>
-              <h2>{formatMonth(visibleMonth)}</h2>
-              <button
-                className="calendar-nav"
-                type="button"
-                aria-label="Наступний місяць"
-                onClick={() => setVisibleMonth(new Date(visibleMonth.getFullYear(), visibleMonth.getMonth() + 1, 1))}
-              >
-                ›
-              </button>
-            </div>
-            <CalendarGrid
-              visibleMonth={visibleMonth}
-              selectedDateKey={dateKey}
-              ariaLabel="Календар дати зміни"
-              onDateClick={(date, nextDateKey) => {
-                setDateKey(nextDateKey);
-                setVisibleMonth(new Date(date.getFullYear(), date.getMonth(), 1));
-                setDatePickerOpen(false);
-              }}
-            />
+        <div className="inline-date-picker">
+          <div className="calendar-header compact-calendar-header">
+            <button
+              className="calendar-nav"
+              type="button"
+              aria-label="Попередній місяць"
+              onClick={() => setVisibleMonth(new Date(visibleMonth.getFullYear(), visibleMonth.getMonth() - 1, 1))}
+            >
+              ‹
+            </button>
+            <h2>{formatMonth(visibleMonth)}</h2>
+            <button
+              className="calendar-nav"
+              type="button"
+              aria-label="Наступний місяць"
+              onClick={() => setVisibleMonth(new Date(visibleMonth.getFullYear(), visibleMonth.getMonth() + 1, 1))}
+            >
+              ›
+            </button>
           </div>
-        )}
+          <CalendarGrid
+            visibleMonth={visibleMonth}
+            selectedDateKey={dateKey}
+            ariaLabel="Календар дати зміни"
+            onDateClick={(date, nextDateKey) => {
+              setDateKey(nextDateKey);
+              setVisibleMonth(new Date(date.getFullYear(), date.getMonth(), 1));
+            }}
+          />
+        </div>
       </div>
       <div className="time-grid">
-        <label>
-          Прихід
-          <input
-            value={startedTime}
-            onChange={(event) => setStartedTime(event.target.value)}
-            type="time"
-            required
-            inputMode="numeric"
-          />
-        </label>
-        {!isActive && (
-          <label>
-            Вихід
-            <input
-              value={endedTime}
-              onChange={(event) => setEndedTime(event.target.value)}
-              type="time"
-              required
-              inputMode="numeric"
-            />
-          </label>
-        )}
+        {renderTimePicker('Прихід', startedTime, 'start', setStartedTime)}
+        {!isActive && renderTimePicker('Вихід', endedTime, 'end', setEndedTime)}
       </div>
       {!isActive && (
         <div className="shift-type-control">
@@ -280,24 +315,23 @@ export function EditShiftForm({ shift, mode = 'edit', onCancel, onSaved }: EditS
           inputMode="decimal"
         />
       </label>
-      <>
-        <label className="checkbox-row">
-          <input
-            type="checkbox"
-            checked={rateMultiplier === 1.5}
-            onChange={(event) => setRateMultiplier(event.target.checked ? 1.5 : 1)}
-          />
-          Коефіцієнт x1.5
-        </label>
-        <label className="checkbox-row">
-          <input
-            type="checkbox"
-            checked={rateMultiplier === 2}
-            onChange={(event) => setRateMultiplier(event.target.checked ? 2 : 1)}
-          />
-          Коефіцієнт x2
-        </label>
-      </>
+      <div className="shift-type-control">
+        <span>Коефіцієнт</span>
+        <div className="segmented-control segmented-control-three">
+          {([1, 1.5, 2] as const).map((multiplier) => (
+            <label key={multiplier}>
+              <input
+                type="radio"
+                name={multiplierInputName}
+                value={multiplier}
+                checked={rateMultiplier === multiplier}
+                onChange={() => setRateMultiplier(multiplier)}
+              />
+              <span>x{multiplier}</span>
+            </label>
+          ))}
+        </div>
+      </div>
       <p className="form-error" hidden={!error}>
         {error}
       </p>
