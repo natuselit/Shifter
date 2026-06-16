@@ -9,7 +9,6 @@ import {
   getRangeKeys,
   getRangeLabel
 } from '../../features/range-select/model';
-import { getTodayCalendarSelection } from '../../features/range-select/calendar-selection';
 import { useSnapshot } from '../../app/providers/store-provider';
 import { CalendarPanel } from '../../widgets/calendar/calendar-grid';
 
@@ -94,13 +93,6 @@ export function AnalyticsPage() {
   const maxDayPay = Math.max(1, ...Array.from(dayStats.values()).map((item) => item.pay));
   const title = getRangeLabel(rangeState) || formatMonth(visibleMonth);
 
-  function selectToday() {
-    const selection = getTodayCalendarSelection();
-    setSelectedDateKey(selection.selectedDateKey);
-    setRangeState(selection.rangeState);
-    setVisibleMonth(selection.visibleMonth);
-  }
-
   return (
     <main className="page">
       <header className="page-header">
@@ -123,26 +115,6 @@ export function AnalyticsPage() {
           setRangeState((current) => getNextRangeState(current, dateKey));
           setVisibleMonth(new Date(date.getFullYear(), date.getMonth(), 1));
         }}
-        actions={[
-          {
-            label: 'Сьогодні',
-            onClick: selectToday
-          },
-          {
-            label: 'Місяць',
-            onClick: () => {
-              setSelectedDateKey(null);
-              setRangeState(clearRangeState());
-            }
-          },
-          {
-            label: 'Скинути',
-            onClick: () => {
-              setSelectedDateKey(null);
-              setRangeState(clearRangeState());
-            }
-          }
-        ]}
       />
       <section className="panel dashboard-summary analytics-summary" aria-label="Підсумки місяця">
         <div className="summary-metric">

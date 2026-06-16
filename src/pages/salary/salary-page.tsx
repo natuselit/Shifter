@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { calculatePay, getDateKey, getTimestampFromDateKey } from '../../entities/shift/model';
 import type { Shift } from '../../entities/shift/types';
-import { formatDateOnly, formatMoney, formatMonth } from '../../shared/lib/format';
+import { formatDateOnly, formatMoney } from '../../shared/lib/format';
 import {
   clearRangeState,
   filterShiftsByRange,
@@ -9,12 +9,9 @@ import {
   getRangeKeys,
   getRangeLabel
 } from '../../features/range-select/model';
-import { getClearedCalendarSelection, getTodayCalendarSelection } from '../../features/range-select/calendar-selection';
 import { useSnapshot } from '../../app/providers/store-provider';
-import { getReportText, copyText } from '../../features/copy-report/report';
 import { CalendarPanel } from '../../widgets/calendar/calendar-grid';
 import { ShiftCard } from '../../widgets/shift-list/shift-card';
-import { useToast } from '../../widgets/toast/toast-provider';
 
 function getMonthShifts(shifts: Shift[], monthDate: Date): Shift[] {
   const year = monthDate.getFullYear();
@@ -27,8 +24,7 @@ function getMonthShifts(shifts: Shift[], monthDate: Date): Shift[] {
 }
 
 export function SalaryPage() {
-  const { shifts, settings } = useSnapshot();
-  const { showToast } = useToast();
+  const { shifts } = useSnapshot();
   const [visibleMonth, setVisibleMonth] = useState(() => new Date(new Date().getFullYear(), new Date().getMonth(), 1));
   const [selectedDateKey, setSelectedDateKey] = useState<string | null>(() => getDateKey(new Date()));
   const [rangeState, setRangeState] = useState(clearRangeState);
@@ -52,37 +48,6 @@ export function SalaryPage() {
     setSelectedDateKey(dateKey);
     setRangeState((current) => getNextRangeState(current, dateKey));
     setVisibleMonth(new Date(date.getFullYear(), date.getMonth(), 1));
-  }
-
-  function applyCalendarSelection(selection: ReturnType<typeof getTodayCalendarSelection>) {
-    setSelectedDateKey(selection.selectedDateKey);
-    setRangeState(selection.rangeState);
-    setVisibleMonth(selection.visibleMonth);
-  }
-
-  async function copyDayReport() {
-    if (!selectedDateKey && !range) {
-      showToast('Оберіть день у календарі', 'info');
-      return;
-    }
-
-    const titleText = range
-      ? `Звіт за ${getRangeLabel(rangeState)}`
-      : `Звіт за ${formatDateOnly(getTimestampFromDateKey(selectedDateKey || getDateKey(new Date())) || Date.now())}`;
-    const ok = await copyText(getReportText(visibleShifts, titleText, settings.surname));
-    showToast(
-      ok ? (range ? 'Звіт періоду скопійовано' : 'Звіт дня скопійовано') : 'Не вдалося скопіювати',
-      ok ? 'success' : 'error'
-    );
-  }
-
-  async function copyMonthReport() {
-    const titleText = range ? `Звіт за ${getRangeLabel(rangeState)}` : `Звіт за ${formatMonth(visibleMonth)}`;
-    const ok = await copyText(getReportText(monthShifts, titleText, settings.surname));
-    showToast(
-      ok ? (range ? 'Звіт періоду скопійовано' : 'Звіт місяця скопійовано') : 'Не вдалося скопіювати',
-      ok ? 'success' : 'error'
-    );
   }
 
   return (
@@ -109,24 +74,6 @@ export function SalaryPage() {
         ariaLabel="Календар зарплати"
         onMonthChange={setVisibleMonth}
         onDateClick={chooseDate}
-        actions={[
-          {
-            label: 'Сьогодні',
-            onClick: () => applyCalendarSelection(getTodayCalendarSelection())
-          },
-          {
-            label: 'Місяць',
-            onClick: () => applyCalendarSelection(getClearedCalendarSelection(visibleMonth))
-          },
-          {
-            label: 'Скинути',
-            onClick: () => applyCalendarSelection(getClearedCalendarSelection(visibleMonth))
-          }
-        ]}
-        secondaryActions={[
-          { label: 'Копіювати день', onClick: () => void copyDayReport() },
-          { label: 'Копіювати місяць', onClick: () => void copyMonthReport() }
-        ]}
       />
       <section className="panel">
         <h2>{title}</h2>

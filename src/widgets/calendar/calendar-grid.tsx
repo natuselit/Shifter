@@ -3,11 +3,6 @@ import { formatDateOnly, formatMonth } from '../../shared/lib/format';
 import { getRangeKeys, type RangeState } from '../../shared/lib/range';
 import type { ReactNode } from 'react';
 
-interface CalendarAction {
-  label: string;
-  onClick: () => void;
-}
-
 interface CalendarGridProps {
   visibleMonth: Date;
   selectedDateKey?: string | null;
@@ -20,8 +15,6 @@ interface CalendarGridProps {
 
 interface CalendarPanelProps extends CalendarGridProps {
   title?: string;
-  actions?: CalendarAction[];
-  secondaryActions?: CalendarAction[];
   children?: ReactNode;
   onMonthChange: (month: Date) => void;
 }
@@ -107,8 +100,6 @@ export function CalendarPanel({
   shiftDateKeys,
   title,
   ariaLabel,
-  actions = [],
-  secondaryActions = [],
   children,
   onDateClick,
   onMonthChange
@@ -142,26 +133,6 @@ export function CalendarPanel({
         ariaLabel={ariaLabel}
         onDateClick={onDateClick}
       />
-      {actions.length > 0 && (
-        <div className={`calendar-actions ${actions.length === 3 ? 'calendar-actions-three' : ''}`}>
-          {actions.map((action) => (
-            <button className="clear" type="button" key={action.label} onClick={action.onClick}>
-              {action.label}
-            </button>
-          ))}
-        </div>
-      )}
-      {secondaryActions.length > 0 && (
-        <div
-          className={`calendar-actions report-actions ${secondaryActions.length === 3 ? 'calendar-actions-three' : ''}`}
-        >
-          {secondaryActions.map((action) => (
-            <button className="clear" type="button" key={action.label} onClick={action.onClick}>
-              {action.label}
-            </button>
-          ))}
-        </div>
-      )}
       {children}
     </section>
   );

@@ -9,7 +9,6 @@ import {
   getRangeKeys,
   getRangeLabel
 } from '../../features/range-select/model';
-import { getClearedCalendarSelection, getTodayCalendarSelection } from '../../features/range-select/calendar-selection';
 import { storage } from '../../shared/storage/local-storage';
 import { useSnapshot, useStore } from '../../app/providers/store-provider';
 import { EditShiftForm, getDefaultNewShift } from '../../features/edit-shift/edit-shift-form';
@@ -139,13 +138,6 @@ export function HistoryPage() {
     showToast('Зміну видалено', 'success');
   }
 
-  function applyCalendarSelection(selection: ReturnType<typeof getTodayCalendarSelection>) {
-    setSelectedDateKey(selection.selectedDateKey);
-    setRangeState(selection.rangeState);
-    setVisibleMonth(selection.visibleMonth);
-    setCreatingShift(false);
-  }
-
   return (
     <main className="page">
       <header className="page-header">
@@ -163,16 +155,6 @@ export function HistoryPage() {
           setCreatingShift(false);
         }}
         onDateClick={chooseDate}
-        actions={[
-          {
-            label: 'Сьогодні',
-            onClick: () => applyCalendarSelection(getTodayCalendarSelection())
-          },
-          {
-            label: 'Усі записи',
-            onClick: () => applyCalendarSelection(getClearedCalendarSelection(visibleMonth))
-          }
-        ]}
       >
         <div className="filter-actions" aria-label="Фільтри історії">
           {filters.map((item) => (
