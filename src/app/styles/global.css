@@ -849,6 +849,11 @@ button:disabled {
   gap: 10px;
 }
 
+.time-grid label,
+.time-grid input {
+  min-width: 0;
+}
+
 .active-history-item {
   border-color: color-mix(in srgb, var(--primary) 30%, transparent);
   background: color-mix(in srgb, var(--primary) 9%, var(--surface-soft));
@@ -915,6 +920,8 @@ button:disabled {
 
 .segmented-control input {
   position: absolute;
+  width: 1px;
+  min-height: 1px;
   opacity: 0;
   pointer-events: none;
 }
