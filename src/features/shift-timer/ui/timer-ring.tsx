@@ -15,25 +15,20 @@ export function TimerRing() {
   const holdTimeoutRef = useRef<number | null>(null);
   const active = Boolean(startedAt);
   const rate = activeRate ?? settings.rate;
-  const holdProgress = holdStartedAt ? Math.min(1, (now - holdStartedAt) / holdDuration) : 0;
 
   useEffect(() => {
-    if (!holdStartedAt) {
-      const interval = window.setInterval(() => setNow(Date.now()), 1000);
-      return () => window.clearInterval(interval);
-    }
+    if (!active) return undefined;
 
-    let frame = 0;
-    const tick = () => {
-      setNow(Date.now());
-      frame = requestAnimationFrame(tick);
-    };
-    frame = requestAnimationFrame(tick);
+    setNow(Date.now());
+    const interval = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(interval);
+  }, [active]);
 
+  useEffect(() => {
     return () => {
-      cancelAnimationFrame(frame);
+      if (holdTimeoutRef.current) window.clearTimeout(holdTimeoutRef.current);
     };
-  }, [active, holdStartedAt]);
+  }, []);
 
   function cancelHold() {
     if (holdTimeoutRef.current) window.clearTimeout(holdTimeoutRef.current);
@@ -97,7 +92,6 @@ export function TimerRing() {
   ]
     .filter(Boolean)
     .join(' ');
-  const visibleProgress = holdProgress >= 0.003 ? holdProgress : 0;
   const ringStyle = {
     '--hold-duration': `${holdDuration || 1}ms`
   } as CSSProperties;
@@ -117,18 +111,10 @@ export function TimerRing() {
         <g className={`svg-ring svg-ring-active ${active ? 'has-progress' : ''}`} data-ring="active">
           <circle className="ring-track" cx="60" cy="60" r="56" pathLength="100" />
         </g>
-        <g className={`svg-ring svg-ring-hold ${visibleProgress > 0 ? 'has-progress' : ''}`} data-ring="hold">
+        <g className="svg-ring svg-ring-hold" data-ring="hold">
           <circle className="ring-track" cx="60" cy="60" r="56" pathLength="100" />
           <g className="ring-progress-layer">
-            <circle
-              className="ring-progress"
-              cx="60"
-              cy="60"
-              r="56"
-              pathLength="100"
-              strokeDasharray={`${visibleProgress * 100} 100`}
-              strokeDashoffset="0"
-            />
+            <circle className="ring-progress" cx="60" cy="60" r="56" pathLength="100" strokeDashoffset="0" />
           </g>
         </g>
       </svg>

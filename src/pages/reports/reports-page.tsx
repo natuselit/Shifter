@@ -40,6 +40,7 @@ import { ShiftCard } from '@/widgets/shift-list';
 export type ReportsView = 'shifts' | 'analytics';
 
 const reportsCalendarCollapsedKey = 'reportsCalendarCollapsed';
+type ReportAnalytics = ReturnType<typeof buildReportAnalytics>;
 
 function AnalyticsList({ entries, emptyText }: { entries: Array<[string, string]>; emptyText: string }) {
   return (
@@ -161,31 +162,43 @@ export function ReportsPage({ view = 'shifts' }: { view?: ReportsView }) {
     return () => window.clearInterval(interval);
   }, [editingShiftId, refresh]);
 
-  const activeShift: ActiveShift | null = startedAt
-    ? {
-        id: '__active_shift__',
-        active: true,
-        startedAt,
-        endedAt: Date.now(),
-        rate: activeRate ?? settings.rate,
-        shiftType: detectShiftType(startedAt),
-        rateMultiplier,
-        doubleRate: rateMultiplier === 2
-      }
-    : null;
-  const allHistoryShifts = activeShift ? [activeShift, ...shifts] : shifts;
-  const range = getRangeKeys(rangeState);
-  const rangeLabel = getRangeLabel(rangeState);
-  const reportShifts = range
-    ? filterShiftsByRange(shifts, rangeState)
-    : selectedDateKey
-      ? shifts.filter((shift) => getDateKey(shift.startedAt) === selectedDateKey)
-      : getMonthShifts(shifts, visibleMonth);
-  const historyVisibleShifts = range
-    ? filterShiftsByRange(allHistoryShifts, rangeState)
-    : selectedDateKey
-      ? allHistoryShifts.filter((shift) => getDateKey(shift.startedAt) === selectedDateKey)
-      : allHistoryShifts;
+  const range = useMemo(() => getRangeKeys(rangeState), [rangeState]);
+  const rangeLabel = useMemo(() => getRangeLabel(rangeState), [rangeState]);
+  const today = new Date();
+  const currentPeriod = {
+    todayKey: getDateKey(today),
+    weekRange: getWeekRange(today),
+    year: today.getFullYear(),
+    month: today.getMonth()
+  };
+  const activeEndedAt = startedAt ? Date.now() : 0;
+  const activeShift = useMemo<ActiveShift | null>(
+    () =>
+      startedAt
+        ? {
+            id: '__active_shift__',
+            active: true,
+            startedAt,
+            endedAt: activeEndedAt,
+            rate: activeRate ?? settings.rate,
+            shiftType: detectShiftType(startedAt),
+            rateMultiplier,
+            doubleRate: rateMultiplier === 2
+          }
+        : null,
+    [activeEndedAt, activeRate, rateMultiplier, settings.rate, startedAt]
+  );
+  const allHistoryShifts = useMemo(() => (activeShift ? [activeShift, ...shifts] : shifts), [activeShift, shifts]);
+  const reportShifts = useMemo(() => {
+    if (range) return filterShiftsByRange(shifts, rangeState);
+    if (selectedDateKey) return shifts.filter((shift) => getDateKey(shift.startedAt) === selectedDateKey);
+    return getMonthShifts(shifts, visibleMonth);
+  }, [range, rangeState, selectedDateKey, shifts, visibleMonth]);
+  const historyVisibleShifts = useMemo(() => {
+    if (range) return filterShiftsByRange(allHistoryShifts, rangeState);
+    if (selectedDateKey) return allHistoryShifts.filter((shift) => getDateKey(shift.startedAt) === selectedDateKey);
+    return allHistoryShifts;
+  }, [allHistoryShifts, range, rangeState, selectedDateKey]);
   const shiftDateKeys = useMemo(() => {
     const keys = new Set(shifts.map((shift) => getDateKey(shift.startedAt)));
     if (startedAt) keys.add(getDateKey(startedAt));
@@ -258,36 +271,43 @@ export function ReportsPage({ view = 'shifts' }: { view?: ReportsView }) {
   }
 
   const scheduleParseResult = useMemo(() => parseScheduleText(scheduleText), [scheduleText]);
-  const analytics = buildReportAnalytics({
-    reportShifts,
-    range,
-    visibleMonth,
-    scheduleEntries: scheduleParseResult.entries,
-    chartMode
-  });
-  const {
-    totalPay: analyticsTotalPay,
-    totalMs: analyticsTotalMs,
-    averagePay,
-    averageShiftMs,
-    averagePayPerHour,
-    bestWeek,
-    chartDates,
-    dayStats,
-    getChartTitle,
-    getChartValue,
-    getPlannedChartValue,
-    maxChartValue,
-    scheduleDiffRows,
-    scheduleEntriesWithPlan,
-    shiftTypePercentages,
-    weekStats
-  } = analytics;
+  const analytics = useMemo<ReportAnalytics | null>(() => {
+    if (view !== 'analytics') return null;
+
+    return buildReportAnalytics({
+      reportShifts,
+      range,
+      visibleMonth,
+      scheduleEntries: scheduleParseResult.entries,
+      chartMode
+    });
+  }, [chartMode, range, reportShifts, scheduleParseResult.entries, view, visibleMonth]);
+  const emptyChartDates = useMemo<ReportAnalytics['chartDates']>(() => [], []);
+  const emptyDayStats = useMemo<ReportAnalytics['dayStats']>(() => new Map(), []);
+  const emptyWeekStats = useMemo<ReportAnalytics['weekStats']>(() => new Map(), []);
+  const emptyScheduleDiffRows = useMemo<ReportAnalytics['scheduleDiffRows']>(() => [], []);
+  const emptyShiftTypePercentages = useMemo<ReportAnalytics['shiftTypePercentages']>(() => [], []);
+  const analyticsTotalPay = analytics?.totalPay ?? 0;
+  const analyticsTotalMs = analytics?.totalMs ?? 0;
+  const averagePay = analytics?.averagePay ?? 0;
+  const averageShiftMs = analytics?.averageShiftMs ?? 0;
+  const averagePayPerHour = analytics?.averagePayPerHour ?? 0;
+  const bestWeek = analytics?.bestWeek;
+  const chartDates = analytics?.chartDates ?? emptyChartDates;
+  const dayStats = analytics?.dayStats ?? emptyDayStats;
+  const getChartTitle = analytics?.getChartTitle ?? (() => '');
+  const getChartValue = analytics?.getChartValue ?? (() => 0);
+  const getPlannedChartValue = analytics?.getPlannedChartValue ?? (() => 0);
+  const maxChartValue = analytics?.maxChartValue ?? 1;
+  const scheduleDiffRows = analytics?.scheduleDiffRows ?? emptyScheduleDiffRows;
+  const scheduleEntriesWithPlan = analytics?.scheduleEntriesWithPlan ?? 0;
+  const shiftTypePercentages = analytics?.shiftTypePercentages ?? emptyShiftTypePercentages;
+  const weekStats = analytics?.weekStats ?? emptyWeekStats;
 
   const quickActions = (
     <div className="reports-quick-actions" aria-label="Швидкий вибір періоду">
       <button
-        className={`filter-chip ${!range && selectedDateKey === getDateKey(new Date()) ? 'active' : ''}`}
+        className={`filter-chip ${!range && selectedDateKey === currentPeriod.todayKey ? 'active' : ''}`}
         type="button"
         onClick={chooseToday}
       >
@@ -295,7 +315,9 @@ export function ReportsPage({ view = 'shifts' }: { view?: ReportsView }) {
       </button>
       <button
         className={`filter-chip ${
-          range?.startKey === getWeekRange().startKey && range?.endKey === getWeekRange().endKey ? 'active' : ''
+          range?.startKey === currentPeriod.weekRange.startKey && range?.endKey === currentPeriod.weekRange.endKey
+            ? 'active'
+            : ''
         }`}
         type="button"
         onClick={chooseWeek}
@@ -306,8 +328,8 @@ export function ReportsPage({ view = 'shifts' }: { view?: ReportsView }) {
         className={`filter-chip ${
           !range &&
           !selectedDateKey &&
-          visibleMonth.getFullYear() === new Date().getFullYear() &&
-          visibleMonth.getMonth() === new Date().getMonth()
+          visibleMonth.getFullYear() === currentPeriod.year &&
+          visibleMonth.getMonth() === currentPeriod.month
             ? 'active'
             : ''
         }`}

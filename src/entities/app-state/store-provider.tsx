@@ -4,6 +4,11 @@ import { normalizeStoredData, storage } from './storage';
 interface StoreContextValue {
   version: number;
   refresh: () => void;
+  settings: typeof storage.settings;
+  shifts: typeof storage.shifts;
+  startedAt: number | null;
+  activeRate: number | null;
+  rateMultiplier: typeof storage.rateMultiplier;
 }
 
 const StoreContext = createContext<StoreContextValue | null>(null);
@@ -18,7 +23,18 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     refresh();
   }, [refresh]);
 
-  const value = useMemo(() => ({ version, refresh }), [version, refresh]);
+  const snapshot = useMemo(
+    () => ({
+      version,
+      settings: storage.settings,
+      shifts: storage.shifts,
+      startedAt: storage.startedAt,
+      activeRate: storage.activeRate,
+      rateMultiplier: storage.rateMultiplier
+    }),
+    [version]
+  );
+  const value = useMemo(() => ({ refresh, ...snapshot }), [refresh, snapshot]);
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;
 }
@@ -30,15 +46,5 @@ export function useStore() {
 }
 
 export function useSnapshot() {
-  const { version, refresh } = useStore();
-
-  return {
-    version,
-    refresh,
-    settings: storage.settings,
-    shifts: storage.shifts,
-    startedAt: storage.startedAt,
-    activeRate: storage.activeRate,
-    rateMultiplier: storage.rateMultiplier
-  };
+  return useStore();
 }

@@ -30,6 +30,16 @@
   box-sizing: border-box;
 }
 
+button,
+a,
+input,
+textarea,
+select,
+label,
+[role='button'] {
+  -webkit-tap-highlight-color: transparent;
+}
+
 body {
   min-height: 100vh;
   margin: 0;
@@ -411,7 +421,6 @@ button {
     opacity 0.14s ease,
     background-color 0.14s ease,
     color 0.14s ease;
-  -webkit-tap-highlight-color: transparent;
 }
 
 button:active {
@@ -670,6 +679,7 @@ button:disabled {
 
 .swiping-history-card .history-card-content {
   transition: none;
+  will-change: transform;
 }
 
 .history-swipe-actions {

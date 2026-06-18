@@ -1,5 +1,5 @@
 import { ArrowLeftRight, Clock3, DollarSign, Pencil, Trash2 } from 'lucide-react';
-import { useRef, useState, type CSSProperties, type PointerEvent, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type CSSProperties, type PointerEvent, type ReactNode } from 'react';
 import { calculatePayBreakdown, normalizeRateMultiplier, type ActiveShift, type Shift } from '@/entities/shift';
 import { formatDateOnly, formatHoursMinutes, formatMoney, formatRate, formatTimeOnly } from '@/shared/lib';
 
@@ -15,6 +15,9 @@ export function ShiftCard({ shift, children, showActions = false, onEdit, onDele
   const startX = useRef(0);
   const startY = useRef(0);
   const isDragging = useRef(false);
+  const swipeOffsetRef = useRef(0);
+  const pendingSwipeOffsetRef = useRef<number | null>(null);
+  const swipeFrameRef = useRef<number | null>(null);
   const [swipeOffset, setSwipeOffset] = useState(0);
   const [isSwiping, setIsSwiping] = useState(false);
   const shiftType = shift.shiftType;
@@ -41,8 +44,51 @@ export function ShiftCard({ shift, children, showActions = false, onEdit, onDele
     .join(' ');
   const contentStyle = showActions ? ({ '--swipe-offset': `${swipeOffset}px` } as CSSProperties) : undefined;
 
+  useEffect(() => {
+    return () => {
+      if (swipeFrameRef.current !== null) cancelAnimationFrame(swipeFrameRef.current);
+    };
+  }, []);
+
+  const commitSwipeOffset = (value: number) => {
+    const nextOffset = Math.round(value);
+
+    pendingSwipeOffsetRef.current = null;
+    if (swipeFrameRef.current !== null) {
+      cancelAnimationFrame(swipeFrameRef.current);
+      swipeFrameRef.current = null;
+    }
+
+    if (swipeOffsetRef.current === nextOffset) return;
+    swipeOffsetRef.current = nextOffset;
+    setSwipeOffset(nextOffset);
+  };
+
+  const scheduleSwipeOffset = (value: number) => {
+    const nextOffset = Math.round(value);
+    if (
+      pendingSwipeOffsetRef.current === nextOffset ||
+      (pendingSwipeOffsetRef.current === null && swipeOffsetRef.current === nextOffset)
+    ) {
+      return;
+    }
+
+    pendingSwipeOffsetRef.current = nextOffset;
+    if (swipeFrameRef.current !== null) return;
+
+    swipeFrameRef.current = requestAnimationFrame(() => {
+      swipeFrameRef.current = null;
+      const pendingOffset = pendingSwipeOffsetRef.current;
+      pendingSwipeOffsetRef.current = null;
+
+      if (pendingOffset === null || swipeOffsetRef.current === pendingOffset) return;
+      swipeOffsetRef.current = pendingOffset;
+      setSwipeOffset(pendingOffset);
+    });
+  };
+
   const closeSwipe = () => {
-    setSwipeOffset(0);
+    commitSwipeOffset(0);
     setIsSwiping(false);
   };
 
@@ -71,19 +117,20 @@ export function ShiftCard({ shift, children, showActions = false, onEdit, onDele
     const maxRight = editSwipeWidth;
     const maxLeft = deleteSwipeWidth;
     const clamped = Math.max(-maxLeft, Math.min(maxRight, deltaX));
-    setSwipeOffset(clamped);
+    scheduleSwipeOffset(clamped);
   };
 
   const handlePointerEnd = (event: PointerEvent<HTMLDivElement>) => {
     if (!showActions) return;
     event.currentTarget.releasePointerCapture?.(event.pointerId);
 
-    if (swipeOffset > editSwipeWidth / 2) {
-      setSwipeOffset(editSwipeWidth);
-    } else if (swipeOffset < -deleteSwipeWidth / 2) {
-      setSwipeOffset(-deleteSwipeWidth);
+    const currentOffset = pendingSwipeOffsetRef.current ?? swipeOffsetRef.current;
+    if (currentOffset > editSwipeWidth / 2) {
+      commitSwipeOffset(editSwipeWidth);
+    } else if (currentOffset < -deleteSwipeWidth / 2) {
+      commitSwipeOffset(-deleteSwipeWidth);
     } else {
-      setSwipeOffset(0);
+      commitSwipeOffset(0);
     }
 
     setIsSwiping(false);
