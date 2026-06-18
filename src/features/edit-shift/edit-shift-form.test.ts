@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { ActiveShift } from '../../entities/shift/types';
-import { storage } from '../../shared/storage/local-storage';
+import { storage } from '@/entities/app-state';
+import type { ActiveShift } from '@/entities/shift';
 import {
   formatTimeInput,
   getTimestampFromDateAndTime,

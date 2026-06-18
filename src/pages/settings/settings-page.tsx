@@ -1,15 +1,10 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
-import { useSnapshot, useStore } from '../../app/providers/store-provider';
-import { accentColorPresets } from '../../entities/settings/model';
-import type { AccentColor } from '../../entities/settings/types';
-import { exportBackup, importBackup } from '../../features/backup-data/backup-data';
-import { useToast } from '../../widgets/toast/toast-provider';
-import { saveSettingsValues, type SettingsFormValues } from '../../features/settings-form/save-settings';
-import {
-  getNotificationPermission,
-  requestNotificationPermission
-} from '../../features/notifications/notification-service';
-import { normalizeNonNegativeNumber } from '../../shared/lib/number';
+import { useSnapshot, useStore } from '@/entities/app-state';
+import { accentColorPresets, type AccentColor } from '@/entities/settings';
+import { exportBackup, importBackup } from '@/features/backup-data';
+import { saveSettingsValues, type SettingsFormValues } from '@/features/settings-form';
+import { normalizeNonNegativeNumber } from '@/shared/lib';
+import { useToast } from '@/shared/ui';
 
 export function SettingsPage() {
   const { settings } = useSnapshot();
@@ -20,13 +15,6 @@ export function SettingsPage() {
   const [startHoldSeconds, setStartHoldSeconds] = useState(String(settings.startHoldSeconds));
   const [endHoldSeconds, setEndHoldSeconds] = useState(String(settings.endHoldSeconds));
   const [accentColor, setAccentColor] = useState<AccentColor>(settings.accentColor);
-  const [notificationsEnabled, setNotificationsEnabled] = useState(settings.notificationsEnabled);
-  const [shiftEndReminderEnabled, setShiftEndReminderEnabled] = useState(settings.shiftEndReminderEnabled);
-  const [shiftEndReminderHours, setShiftEndReminderHours] = useState(String(settings.shiftEndReminderHours));
-  const [shiftEndReminderRepeatMinutes, setShiftEndReminderRepeatMinutes] = useState(
-    String(settings.shiftEndReminderRepeatMinutes)
-  );
-  const [notificationPermission, setNotificationPermission] = useState(() => getNotificationPermission());
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
@@ -35,19 +23,10 @@ export function SettingsPage() {
     setStartHoldSeconds(String(settings.startHoldSeconds));
     setEndHoldSeconds(String(settings.endHoldSeconds));
     setAccentColor(settings.accentColor);
-    setNotificationsEnabled(settings.notificationsEnabled);
-    setShiftEndReminderEnabled(settings.shiftEndReminderEnabled);
-    setShiftEndReminderHours(String(settings.shiftEndReminderHours));
-    setShiftEndReminderRepeatMinutes(String(settings.shiftEndReminderRepeatMinutes));
-    setNotificationPermission(getNotificationPermission());
   }, [
     settings.accentColor,
     settings.endHoldSeconds,
-    settings.notificationsEnabled,
     settings.rate,
-    settings.shiftEndReminderEnabled,
-    settings.shiftEndReminderHours,
-    settings.shiftEndReminderRepeatMinutes,
     settings.startHoldSeconds,
     settings.surname
   ]);
@@ -58,18 +37,12 @@ export function SettingsPage() {
       rate: normalizeNonNegativeNumber(rate),
       startHoldSeconds,
       endHoldSeconds,
-      accentColor,
-      notificationsEnabled,
-      shiftEndReminderEnabled,
-      shiftEndReminderHours,
-      shiftEndReminderRepeatMinutes
+      accentColor
     }
   ) {
     const normalized = saveSettingsValues(next);
     setStartHoldSeconds(String(normalized.startHoldSeconds));
     setEndHoldSeconds(String(normalized.endHoldSeconds));
-    setShiftEndReminderHours(String(normalized.shiftEndReminderHours));
-    setShiftEndReminderRepeatMinutes(String(normalized.shiftEndReminderRepeatMinutes));
     refresh();
   }
 
@@ -79,21 +52,8 @@ export function SettingsPage() {
       rate: normalizeNonNegativeNumber(rate),
       startHoldSeconds: Number(startHoldSeconds),
       endHoldSeconds: Number(endHoldSeconds),
-      accentColor,
-      notificationsEnabled,
-      shiftEndReminderEnabled,
-      shiftEndReminderHours: Number(shiftEndReminderHours),
-      shiftEndReminderRepeatMinutes: Number(shiftEndReminderRepeatMinutes)
+      accentColor
     };
-  }
-
-  async function enableSystemNotifications() {
-    const permission = await requestNotificationPermission();
-    setNotificationPermission(permission);
-    const enabled = permission === 'granted';
-    setNotificationsEnabled(enabled);
-    save({ ...getBaseSettingsFormValues(), notificationsEnabled: enabled });
-    showToast(enabled ? 'Системні сповіщення увімкнено' : 'Сповіщення не дозволено', enabled ? 'success' : 'error');
   }
 
   async function handleImport(file: File | undefined) {
@@ -204,67 +164,6 @@ export function SettingsPage() {
             placeholder="5"
           />
         </label>
-        <div className="data-tools">
-          <strong>Сповіщення</strong>
-          <div className="notification-status">
-            <span>
-              {notificationPermission === 'unsupported'
-                ? 'Не підтримуються'
-                : notificationPermission === 'granted'
-                  ? 'Системні сповіщення дозволено'
-                  : notificationPermission === 'denied'
-                    ? 'Системні сповіщення заблоковано'
-                    : 'Системні сповіщення не увімкнено'}
-            </span>
-            {notificationPermission !== 'unsupported' && notificationPermission !== 'granted' && (
-              <button className="clear save-action" type="button" onClick={() => void enableSystemNotifications()}>
-                Увімкнути
-              </button>
-            )}
-          </div>
-          <label className="checkbox-row">
-            <input
-              type="checkbox"
-              checked={shiftEndReminderEnabled}
-              onChange={(event) => {
-                const checked = event.target.checked;
-                setShiftEndReminderEnabled(checked);
-                save({ ...getBaseSettingsFormValues(), shiftEndReminderEnabled: checked });
-              }}
-            />
-            Нагадувати завершити зміну
-          </label>
-          <label>
-            Нагадати після, год
-            <input
-              value={shiftEndReminderHours}
-              onChange={(event) => setShiftEndReminderHours(event.target.value)}
-              onBlur={() => save()}
-              type="number"
-              min="1"
-              max="16"
-              step="1"
-              inputMode="numeric"
-              placeholder="8"
-              disabled={!shiftEndReminderEnabled}
-            />
-          </label>
-          <label>
-            Повторювати кожні, хв
-            <input
-              value={shiftEndReminderRepeatMinutes}
-              onChange={(event) => setShiftEndReminderRepeatMinutes(event.target.value)}
-              onBlur={() => save()}
-              type="number"
-              min="5"
-              max="120"
-              step="5"
-              inputMode="numeric"
-              placeholder="15"
-              disabled={!shiftEndReminderEnabled}
-            />
-          </label>
-        </div>
         <div className="data-tools">
           <strong>Дані</strong>
           <div className="calendar-actions">

@@ -1,7 +1,15 @@
-import { normalizeSettingsValue } from '../../entities/settings/model';
-import type { BackupPayload } from '../../entities/settings/types';
-import { getDateKey, normalizeShiftValue } from '../../entities/shift/model';
-import { storage } from '../../shared/storage/local-storage';
+import { storage } from '@/entities/app-state';
+import { normalizeSettingsValue, type Settings } from '@/entities/settings';
+import { normalizeShiftValue, type Shift } from '@/entities/shift';
+import { getDateKey } from '@/shared/lib';
+
+export interface BackupPayload {
+  version: number;
+  exportedAt: string;
+  settings: Settings;
+  shifts: Shift[];
+  lastShift: Shift | null;
+}
 
 export function exportBackup(): void {
   const data: BackupPayload = {

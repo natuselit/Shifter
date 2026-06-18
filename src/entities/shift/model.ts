@@ -1,4 +1,11 @@
 import type { PayBreakdown, RateMultiplier, Shift, ShiftType } from './types';
+import { getDateKey, getTimestampFromDateKey } from '@/shared/lib/date';
+import { formatTimeOnly } from '@/shared/lib/format';
+
+export { getDateKey, getTimestampFromDateKey } from '@/shared/lib/date';
+
+type PayInput = Pick<Shift, 'startedAt' | 'endedAt' | 'rate'> &
+  Partial<Pick<Shift, 'shiftType' | 'rateMultiplier' | 'doubleRate'>>;
 
 export function createShiftId(): string {
   if (globalThis.crypto?.randomUUID) {
@@ -78,44 +85,18 @@ export function normalizeShiftValue(shift: unknown, index = 0, options: { strict
   };
 }
 
-export function getDateKey(value: Date | number | string): string {
-  const date = value instanceof Date ? value : new Date(value);
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-}
-
-export function getTimestampFromDateKey(dateKey: string, endOfDay = false): number | null {
-  const [year, month, day] = String(dateKey || '')
-    .split('-')
-    .map(Number);
-  const date = new Date(year, month - 1, day);
-
-  if (
-    !Number.isInteger(year) ||
-    !Number.isInteger(month) ||
-    !Number.isInteger(day) ||
-    date.getFullYear() !== year ||
-    date.getMonth() !== month - 1 ||
-    date.getDate() !== day
-  ) {
-    return null;
-  }
-
-  date.setHours(endOfDay ? 23 : 0, endOfDay ? 59 : 0, endOfDay ? 59 : 0, endOfDay ? 999 : 0);
-  return date.getTime();
-}
-
 export function isShiftInDateRange(shift: Shift, startKey: string, endKey: string): boolean {
   const start = getTimestampFromDateKey(startKey);
   const end = getTimestampFromDateKey(endKey, true);
   return start !== null && end !== null && shift.startedAt >= start && shift.startedAt <= end;
 }
 
-export function getShiftWindow(timestamp: number): { start: number; end: number; shiftType: ShiftType } {
+export function getShiftWindow(
+  timestamp: number,
+  forcedShiftType?: ShiftType
+): { start: number; end: number; shiftType: ShiftType } {
   const date = new Date(timestamp);
-  const shiftType = detectShiftType(timestamp);
+  const shiftType = forcedShiftType || detectShiftType(timestamp);
   const start = new Date(date);
   const end = new Date(date);
 
@@ -134,9 +115,7 @@ export function getShiftWindow(timestamp: number): { start: number; end: number;
   return { start: timestamp, end: timestamp, shiftType };
 }
 
-export function calculatePayBreakdown(
-  shift: Pick<Shift, 'startedAt' | 'endedAt' | 'rate' | 'rateMultiplier' | 'doubleRate'>
-): PayBreakdown {
+export function calculatePayBreakdown(shift: PayInput): PayBreakdown {
   const rate = Number(shift.rate) || 0;
   const totalMs = Math.max(0, shift.endedAt - shift.startedAt);
   const rateMultiplier = normalizeRateMultiplier(shift.rateMultiplier ?? (shift.doubleRate ? 2 : 1));
@@ -151,7 +130,7 @@ export function calculatePayBreakdown(
     };
   }
 
-  const window = getShiftWindow(shift.startedAt);
+  const window = getShiftWindow(shift.startedAt, shift.shiftType);
   const baseMs = Math.max(0, Math.min(shift.endedAt, window.end) - Math.max(shift.startedAt, window.start));
   const overtimeMs = Math.max(0, totalMs - baseMs);
 
@@ -164,9 +143,7 @@ export function calculatePayBreakdown(
   };
 }
 
-export function calculatePay(
-  shift: Pick<Shift, 'startedAt' | 'endedAt' | 'rate' | 'rateMultiplier' | 'doubleRate'>
-): number {
+export function calculatePay(shift: PayInput): number {
   return calculatePayBreakdown(shift).total;
 }
 
@@ -183,4 +160,9 @@ export function calculateLivePay(startedAt: number | null, rate: number, rateMul
 
 export function hasShiftOnDate(shifts: Shift[], dateKey: string, ignoredShiftId: string | null = null): boolean {
   return shifts.some((shift) => shift.id !== ignoredShiftId && getDateKey(shift.startedAt) === dateKey);
+}
+
+export function getShiftCopyText(shift: Shift, surname: string): string {
+  const period = `${formatTimeOnly(shift.startedAt)}-${formatTimeOnly(shift.endedAt)}`;
+  return [String(surname || '').trim(), period].filter(Boolean).join(' ');
 }

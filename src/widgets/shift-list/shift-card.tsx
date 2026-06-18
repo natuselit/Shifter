@@ -1,8 +1,7 @@
 import { ArrowLeftRight, Clock3, DollarSign, Pencil, Trash2 } from 'lucide-react';
-import type { ReactNode } from 'react';
-import { calculatePay, normalizeRateMultiplier } from '../../entities/shift/model';
-import type { ActiveShift, Shift } from '../../entities/shift/types';
-import { formatDateOnly, formatHoursMinutes, formatMoney, formatRate, formatTimeOnly } from '../../shared/lib/format';
+import { useRef, useState, type CSSProperties, type PointerEvent, type ReactNode } from 'react';
+import { calculatePayBreakdown, normalizeRateMultiplier, type ActiveShift, type Shift } from '@/entities/shift';
+import { formatDateOnly, formatHoursMinutes, formatMoney, formatRate, formatTimeOnly } from '@/shared/lib';
 
 interface ShiftCardProps {
   shift: Shift | ActiveShift;
@@ -13,65 +12,182 @@ interface ShiftCardProps {
 }
 
 export function ShiftCard({ shift, children, showActions = false, onEdit, onDelete }: ShiftCardProps) {
+  const startX = useRef(0);
+  const startY = useRef(0);
+  const isDragging = useRef(false);
+  const [swipeOffset, setSwipeOffset] = useState(0);
+  const [isSwiping, setIsSwiping] = useState(false);
   const shiftType = shift.shiftType;
   const multiplier = normalizeRateMultiplier(shift.rateMultiplier ?? (shift.doubleRate ? 2 : 1));
+  const payBreakdown = calculatePayBreakdown(shift);
+  const hasManualMultiplier = payBreakdown.rateMultiplier !== 1;
+  const basePay = (payBreakdown.baseMs / 3600000) * shift.rate;
+  const overtimePay = (payBreakdown.overtimeMs / 3600000) * shift.rate * 1.5;
+  const multiplierPay = (payBreakdown.multiplierMs / 3600000) * shift.rate * payBreakdown.rateMultiplier;
   const isActive = 'active' in shift && shift.active;
+  const canDelete = showActions && !isActive;
+  const editSwipeWidth = showActions ? 46 : 0;
+  const deleteSwipeWidth = canDelete ? 46 : 0;
   const className = [
     'history-card',
     shiftType === '2 зміна' ? 'shift-second-card' : 'shift-first-card',
-    isActive ? 'active-history-item' : ''
+    isActive ? 'active-history-item' : '',
+    showActions ? 'swipe-history-card' : '',
+    isSwiping ? 'swiping-history-card' : '',
+    swipeOffset > 0 ? 'edit-swipe-open' : '',
+    swipeOffset < 0 ? 'delete-swipe-open' : ''
   ]
     .filter(Boolean)
     .join(' ');
+  const contentStyle = showActions ? ({ '--swipe-offset': `${swipeOffset}px` } as CSSProperties) : undefined;
+
+  const closeSwipe = () => {
+    setSwipeOffset(0);
+    setIsSwiping(false);
+  };
+
+  const handlePointerDown = (event: PointerEvent<HTMLDivElement>) => {
+    if (!showActions) return;
+    startX.current = event.clientX;
+    startY.current = event.clientY;
+    isDragging.current = false;
+    setIsSwiping(true);
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+  };
+
+  const handlePointerMove = (event: PointerEvent<HTMLDivElement>) => {
+    if (!showActions || !isSwiping) return;
+
+    const deltaX = event.clientX - startX.current;
+    const deltaY = event.clientY - startY.current;
+
+    if (!isDragging.current && Math.abs(deltaX) < 8) return;
+    if (!isDragging.current && Math.abs(deltaY) > Math.abs(deltaX)) {
+      setIsSwiping(false);
+      return;
+    }
+
+    isDragging.current = true;
+    const maxRight = editSwipeWidth;
+    const maxLeft = deleteSwipeWidth;
+    const clamped = Math.max(-maxLeft, Math.min(maxRight, deltaX));
+    setSwipeOffset(clamped);
+  };
+
+  const handlePointerEnd = (event: PointerEvent<HTMLDivElement>) => {
+    if (!showActions) return;
+    event.currentTarget.releasePointerCapture?.(event.pointerId);
+
+    if (swipeOffset > editSwipeWidth / 2) {
+      setSwipeOffset(editSwipeWidth);
+    } else if (swipeOffset < -deleteSwipeWidth / 2) {
+      setSwipeOffset(-deleteSwipeWidth);
+    } else {
+      setSwipeOffset(0);
+    }
+
+    setIsSwiping(false);
+    isDragging.current = false;
+  };
 
   return (
     <li className={className}>
-      <div className="history-card-header">
-        <div className="history-title-group">
-          <span className="history-date">{isActive ? 'Поточна зміна' : formatDateOnly(shift.startedAt)}</span>
-          <span className={`history-badge ${shiftType === '2 зміна' ? 'second-shift' : 'first-shift'}`}>
-            {shiftType}
-          </span>
-        </div>
-        <strong className="history-amount">{formatMoney(calculatePay(shift))}</strong>
-      </div>
-      <div className="history-meta">
-        <span>
-          <Clock3 size={18} />
-          <span>
-            {isActive
-              ? `${formatTimeOnly(shift.startedAt)} - зараз`
-              : `${formatTimeOnly(shift.startedAt)} - ${formatTimeOnly(shift.endedAt)}`}
-          </span>
-        </span>
-        <span>
-          <ArrowLeftRight size={18} />
-          <span>{formatHoursMinutes(shift.endedAt - shift.startedAt)}</span>
-        </span>
-        <span>
-          <DollarSign size={18} />
-          <span>{multiplier === 1 ? formatRate(shift.rate) : `${formatRate(shift.rate)} · x${multiplier}`}</span>
-        </span>
-      </div>
       {showActions && (
-        <div className={isActive ? 'history-actions active-history-actions' : 'history-actions'}>
-          <button className="small-action" type="button" aria-label="Редагувати" title="Редагувати" onClick={onEdit}>
+        <div className="history-swipe-actions" aria-hidden={swipeOffset === 0}>
+          <button
+            className="history-swipe-action history-swipe-edit"
+            type="button"
+            aria-label="Редагувати"
+            title="Редагувати"
+            tabIndex={swipeOffset > 0 ? 0 : -1}
+            onClick={() => {
+              closeSwipe();
+              onEdit?.();
+            }}
+          >
             <Pencil size={18} />
           </button>
-          {!isActive && (
+          {canDelete && (
             <button
-              className="small-action danger-action"
+              className="history-swipe-action history-swipe-delete"
               type="button"
               aria-label="Видалити"
               title="Видалити"
-              onClick={onDelete}
+              tabIndex={swipeOffset < 0 ? 0 : -1}
+              onClick={() => {
+                closeSwipe();
+                onDelete?.();
+              }}
             >
               <Trash2 size={18} />
             </button>
           )}
         </div>
       )}
-      {children}
+      <div
+        className="history-card-content"
+        style={contentStyle}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerEnd}
+        onPointerCancel={handlePointerEnd}
+      >
+        <div className="history-card-header">
+          <div className="history-title-group">
+            <span className="history-date">{isActive ? 'Поточна зміна' : formatDateOnly(shift.startedAt)}</span>
+            <span className={`history-badge ${shiftType === '2 зміна' ? 'second-shift' : 'first-shift'}`}>
+              {shiftType}
+            </span>
+          </div>
+          <div className="history-card-side">
+            <strong className="history-amount">{formatMoney(payBreakdown.total)}</strong>
+          </div>
+        </div>
+        <div className="history-meta">
+          <span>
+            <Clock3 size={18} />
+            <span>
+              {isActive
+                ? `${formatTimeOnly(shift.startedAt)} - зараз`
+                : `${formatTimeOnly(shift.startedAt)} - ${formatTimeOnly(shift.endedAt)}`}
+            </span>
+          </span>
+          <span>
+            <ArrowLeftRight size={18} />
+            <span>{formatHoursMinutes(shift.endedAt - shift.startedAt)}</span>
+          </span>
+          <span>
+            <DollarSign size={18} />
+            <span>{multiplier === 1 ? formatRate(shift.rate) : `${formatRate(shift.rate)} · x${multiplier}`}</span>
+          </span>
+        </div>
+        <div
+          className={`history-pay-details ${hasManualMultiplier ? 'history-pay-details-single' : ''}`}
+          aria-label="Деталі розрахунку зарплати"
+        >
+          {hasManualMultiplier ? (
+            <span>
+              <em>x{payBreakdown.rateMultiplier}</em>
+              <strong>{formatHoursMinutes(payBreakdown.multiplierMs)}</strong>
+              <b>{formatMoney(multiplierPay)}</b>
+            </span>
+          ) : (
+            <>
+              <span>
+                <em>Звичайні</em>
+                <strong>{formatHoursMinutes(payBreakdown.baseMs)}</strong>
+                <b>{formatMoney(basePay)}</b>
+              </span>
+              <span>
+                <em>x1.5</em>
+                <strong>{formatHoursMinutes(payBreakdown.overtimeMs)}</strong>
+                <b>{formatMoney(overtimePay)}</b>
+              </span>
+            </>
+          )}
+        </div>
+        {children}
+      </div>
     </li>
   );
 }

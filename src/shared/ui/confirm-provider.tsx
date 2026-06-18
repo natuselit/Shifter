@@ -34,7 +34,7 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
       {children}
       {request && (
         <div className="modal-backdrop" onClick={(event) => event.target === event.currentTarget && close(false)}>
-          <div className="confirm-modal">
+          <div className="confirm-modal" role="dialog" aria-modal="true" aria-label={request.message}>
             <p>{request.message}</p>
             <div className="edit-actions">
               <button className="small-action" type="button" onClick={() => close(false)}>

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { storage } from '../../shared/storage/local-storage';
+import { storage } from '@/entities/app-state';
 import { importBackup } from './backup-data';
 
 function installLocalStorage() {
@@ -37,7 +37,12 @@ describe('backup import', () => {
       jsonFile({
         version: 1,
         exportedAt: new Date().toISOString(),
-        settings: { rate: 120, startHoldSeconds: 3, endHoldSeconds: 5, surname: 'Петренко' },
+        settings: {
+          rate: 120,
+          startHoldSeconds: 3,
+          endHoldSeconds: 5,
+          surname: 'Петренко'
+        },
         shifts: [shift],
         lastShift: shift
       })

@@ -1,11 +1,9 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
-import { calculateLivePay } from '../../entities/shift/model';
-import { formatDuration, formatMoney, formatTimeOnly } from '../../shared/lib/format';
-import { storage } from '../../shared/storage/local-storage';
-import { useSnapshot, useStore } from '../../app/providers/store-provider';
-import { useToast } from '../toast/toast-provider';
-import { copyText, getShiftCopyText } from '../../features/copy-report/report';
-import { finishCurrentShift, startCurrentShift } from '../../features/shift-timer/shift-timer';
+import { storage, useSnapshot, useStore } from '@/entities/app-state';
+import { calculateLivePay, getShiftCopyText } from '@/entities/shift';
+import { copyText, formatDuration, formatMoney, formatTimeOnly } from '@/shared/lib';
+import { useToast } from '@/shared/ui';
+import { finishCurrentShift, startCurrentShift } from '../shift-timer';
 
 export function TimerRing() {
   const { settings, startedAt, activeRate, rateMultiplier } = useSnapshot();
@@ -20,7 +18,7 @@ export function TimerRing() {
   const holdProgress = holdStartedAt ? Math.min(1, (now - holdStartedAt) / holdDuration) : 0;
 
   useEffect(() => {
-    if (!active && !holdStartedAt) {
+    if (!holdStartedAt) {
       const interval = window.setInterval(() => setNow(Date.now()), 1000);
       return () => window.clearInterval(interval);
     }
@@ -63,8 +61,8 @@ export function TimerRing() {
     refresh();
 
     try {
-      await copyText(getShiftCopyText(result.shift, storage.settings.surname));
-      showToast('Скопійовано', 'success');
+      const copied = await copyText(getShiftCopyText(result.shift, storage.settings.surname));
+      showToast(copied ? 'Скопійовано' : 'Не вдалося скопіювати', copied ? 'success' : 'error');
     } catch {
       showToast('Не вдалося скопіювати', 'error');
     }
@@ -86,6 +84,11 @@ export function TimerRing() {
 
   const elapsed = startedAt ? formatDuration(now - startedAt) : '00:00:00';
   const livePay = startedAt ? formatMoney(calculateLivePay(startedAt, rate, rateMultiplier)) : formatMoney(0);
+  const actionLabel = active ? 'Фініш' : 'Старт';
+  const holdSeconds = active ? settings.endHoldSeconds : settings.startHoldSeconds;
+  const accessibleLabel = holdStartedAt
+    ? `${actionLabel}. Тримайте кнопку.`
+    : `${actionLabel}. Утримуйте ${holdSeconds} с. Поточний час зміни ${elapsed}. Зароблено ${livePay}.`;
   const timerClassName = [
     'timer-ring',
     active ? 'active' : 'ready',
@@ -104,7 +107,7 @@ export function TimerRing() {
       className={timerClassName}
       type="button"
       style={ringStyle}
-      aria-label={active ? 'Таймер зміни' : 'Таймер'}
+      aria-label={accessibleLabel}
       onPointerDown={startHold}
       onPointerUp={cancelHold}
       onPointerCancel={cancelHold}
@@ -131,12 +134,8 @@ export function TimerRing() {
       </svg>
       <div className="timer-card">
         <div className="timer-face timer-front">
-          <span className="ring-action">{active ? 'Фініш' : 'Старт'}</span>
-          <span className="ring-hint">
-            {holdStartedAt
-              ? 'Тримайте...'
-              : `утримуйте ${active ? settings.endHoldSeconds : settings.startHoldSeconds} с`}
-          </span>
+          <span className="ring-action">{actionLabel}</span>
+          <span className="ring-hint">{holdStartedAt ? 'Тримайте...' : `утримуйте ${holdSeconds} с`}</span>
           <span className="ring-clock">{formatTimeOnly(now)}</span>
           <p className="time">{elapsed}</p>
           <span className="ring-pay">{livePay}</span>

@@ -1,7 +1,6 @@
-import { createShiftId, detectShiftType, getDateKey, hasShiftOnDate } from '../../entities/shift/model';
-import type { Settings } from '../../entities/settings/types';
-import type { Shift } from '../../entities/shift/types';
-import { storage } from '../../shared/storage/local-storage';
+import { storage } from '@/entities/app-state';
+import type { Settings } from '@/entities/settings';
+import { createShiftId, detectShiftType, getDateKey, hasShiftOnDate, type Shift } from '@/entities/shift';
 
 export function startCurrentShift(settings: Settings): { ok: true } | { ok: false; message: string } {
   if (hasShiftOnDate(storage.shifts, getDateKey(new Date()))) {

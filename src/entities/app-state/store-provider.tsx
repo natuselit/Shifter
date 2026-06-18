@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { normalizeStoredData, storage } from '../../shared/storage/local-storage';
+import { normalizeStoredData, storage } from './storage';
 
 interface StoreContextValue {
   version: number;

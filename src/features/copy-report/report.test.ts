@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { copyText } from './report';
+import { copyText } from '@/shared/lib';
+import { buildReportText } from './report';
 
 describe('copyText', () => {
   afterEach(() => {
@@ -37,5 +38,28 @@ describe('copyText', () => {
 
   it('returns false for empty text', async () => {
     await expect(copyText('   ')).resolves.toBe(false);
+  });
+});
+
+describe('buildReportText', () => {
+  it('builds report summary with shift rows', () => {
+    const text = buildReportText({
+      title: 'Звіт за червень',
+      shifts: [
+        {
+          id: '1',
+          startedAt: new Date(2026, 5, 15, 6, 30).getTime(),
+          endedAt: new Date(2026, 5, 15, 14, 30).getTime(),
+          rate: 100,
+          shiftType: '1 зміна',
+          rateMultiplier: 1,
+          doubleRate: false
+        }
+      ]
+    });
+
+    expect(text).toContain('Звіт за червень');
+    expect(text).toContain('Зміни: 1');
+    expect(text).toContain('1 зміна');
   });
 });

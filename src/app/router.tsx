@@ -1,10 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
-import { AnalyticsPage } from '../pages/analytics/analytics-page';
-import { HistoryPage } from '../pages/history/history-page';
-import { SalaryPage } from '../pages/salary/salary-page';
-import { SettingsPage } from '../pages/settings/settings-page';
-import { TimerPage } from '../pages/timer/timer-page';
-import { BottomNav } from '../widgets/bottom-nav/bottom-nav';
+import { ReportsPage } from '@/pages/reports';
+import { SettingsPage } from '@/pages/settings';
+import { TimerPage } from '@/pages/timer';
+import { BottomNav } from '@/widgets/bottom-nav';
+
+const legacyRedirects: Record<string, string> = {
+  '/history': '#/reports',
+  '/salary': '#/analytics'
+};
 
 function normalizeHashPath(hash: string): string {
   const path = hash.replace(/^#/, '') || '/';
@@ -28,18 +31,25 @@ function useHashPath() {
 export function AppRouter() {
   const path = useHashPath();
   const page = useMemo(() => {
-    if (path === '/history') return <HistoryPage />;
-    if (path === '/salary') return <SalaryPage />;
-    if (path === '/analytics') return <AnalyticsPage />;
+    if (path in legacyRedirects) return null;
+    if (path === '/reports') return <ReportsPage />;
+    if (path === '/analytics') return <ReportsPage view="analytics" />;
     if (path === '/settings') return <SettingsPage />;
     return <TimerPage />;
   }, [path]);
 
   useEffect(() => {
+    const redirectTo = legacyRedirects[path];
+    if (redirectTo) {
+      window.location.replace(redirectTo);
+      return;
+    }
+
     const titles: Record<string, string> = {
       '/': 'Зміна',
-      '/history': 'Історія',
-      '/salary': 'Зарплата',
+      '/history': 'Зміни',
+      '/reports': 'Зміни',
+      '/salary': 'Аналітика',
       '/analytics': 'Аналітика',
       '/settings': 'Налаштування'
     };

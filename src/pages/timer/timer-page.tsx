@@ -1,4 +1,4 @@
-import { TimerRing } from '../../widgets/timer-ring/timer-ring';
+import { TimerRing } from '@/features/shift-timer';
 
 export function TimerPage() {
   return (

@@ -1,6 +1,6 @@
 import { useEffect, type ReactNode } from 'react';
-import { getAccentColorPreset } from '../../entities/settings/model';
-import { useSnapshot } from './store-provider';
+import { useSnapshot } from '@/entities/app-state';
+import { getAccentColorPreset } from '@/entities/settings';
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const { settings } = useSnapshot();

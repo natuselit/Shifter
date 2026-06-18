@@ -1,6 +1,5 @@
-import type { Shift } from '../../entities/shift/types';
-import { getTimestampFromDateKey, isShiftInDateRange } from '../../entities/shift/model';
 import { formatDateOnly } from './format';
+import { getTimestampFromDateKey } from './date';
 
 export interface RangeState {
   rangeStartKey: string | null;
@@ -46,10 +45,4 @@ export function getRangeLabel(state: RangeState): string {
   const startText = formatDateOnly(start);
   const endText = formatDateOnly(end);
   return range.startKey === range.endKey ? startText : `${startText} - ${endText}`;
-}
-
-export function filterShiftsByRange<T extends Shift>(shifts: T[], state: RangeState): T[] {
-  const range = getRangeKeys(state);
-  if (!range) return shifts;
-  return shifts.filter((shift) => isShiftInDateRange(shift, range.startKey, range.endKey));
 }

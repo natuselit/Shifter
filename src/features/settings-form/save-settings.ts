@@ -1,7 +1,12 @@
-import { clampHoldSeconds, clampNumber, defaultSettings, normalizeSettingsValue } from '../../entities/settings/model';
-import type { AccentColor, Settings } from '../../entities/settings/types';
-import { normalizeNonNegativeNumber } from '../../shared/lib/number';
-import { storage } from '../../shared/storage/local-storage';
+import { storage } from '@/entities/app-state';
+import {
+  clampHoldSeconds,
+  defaultSettings,
+  normalizeSettingsValue,
+  type AccentColor,
+  type Settings
+} from '@/entities/settings';
+import { normalizeNonNegativeNumber } from '@/shared/lib';
 
 export interface SettingsFormValues {
   surname: string;
@@ -9,10 +14,6 @@ export interface SettingsFormValues {
   startHoldSeconds: unknown;
   endHoldSeconds: unknown;
   accentColor: AccentColor;
-  notificationsEnabled: boolean;
-  shiftEndReminderEnabled: boolean;
-  shiftEndReminderHours: unknown;
-  shiftEndReminderRepeatMinutes: unknown;
 }
 
 export function saveSettingsValues(values: SettingsFormValues): Settings {
@@ -21,16 +22,7 @@ export function saveSettingsValues(values: SettingsFormValues): Settings {
     rate: normalizeNonNegativeNumber(values.rate),
     startHoldSeconds: clampHoldSeconds(values.startHoldSeconds, defaultSettings.startHoldSeconds),
     endHoldSeconds: clampHoldSeconds(values.endHoldSeconds, defaultSettings.endHoldSeconds),
-    accentColor: values.accentColor,
-    notificationsEnabled: values.notificationsEnabled,
-    shiftEndReminderEnabled: values.shiftEndReminderEnabled,
-    shiftEndReminderHours: clampNumber(values.shiftEndReminderHours, defaultSettings.shiftEndReminderHours, 1, 16),
-    shiftEndReminderRepeatMinutes: clampNumber(
-      values.shiftEndReminderRepeatMinutes,
-      defaultSettings.shiftEndReminderRepeatMinutes,
-      5,
-      120
-    )
+    accentColor: values.accentColor
   });
 
   storage.settings = normalized;

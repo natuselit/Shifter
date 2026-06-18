@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { storage } from '../../shared/storage/local-storage';
+import { storage } from '@/entities/app-state';
 import { saveSettingsValues } from './save-settings';
 
 function installLocalStorage() {
@@ -24,15 +24,10 @@ describe('saveSettingsValues', () => {
       rate: 120,
       startHoldSeconds: 3,
       endHoldSeconds: 5,
-      accentColor: 'yellow',
-      notificationsEnabled: true,
-      shiftEndReminderEnabled: true,
-      shiftEndReminderHours: 8,
-      shiftEndReminderRepeatMinutes: 15
+      accentColor: 'yellow'
     });
 
     expect(settings.accentColor).toBe('yellow');
-    expect(settings.notificationsEnabled).toBe(true);
     expect(storage.settings.accentColor).toBe('yellow');
   });
 });

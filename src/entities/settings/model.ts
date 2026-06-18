@@ -20,11 +20,7 @@ export const defaultSettings: Settings = {
   startHoldSeconds: 3,
   endHoldSeconds: 5,
   surname: '',
-  accentColor: 'green',
-  notificationsEnabled: false,
-  shiftEndReminderEnabled: true,
-  shiftEndReminderHours: 8,
-  shiftEndReminderRepeatMinutes: 15
+  accentColor: 'green'
 };
 
 export function normalizeAccentColor(value: unknown): AccentColor {
@@ -44,12 +40,6 @@ export function clampHoldSeconds(value: unknown, fallback: number): number {
   return Math.min(10, Math.max(1, seconds));
 }
 
-export function clampNumber(value: unknown, fallback: number, min: number, max: number): number {
-  const number = Math.round(Number(value));
-  if (!Number.isFinite(number)) return fallback;
-  return Math.min(max, Math.max(min, number));
-}
-
 export function normalizeSettingsValue(settings: Partial<Settings> | null | undefined): Settings {
   const rate = Number(settings?.rate);
 
@@ -58,18 +48,6 @@ export function normalizeSettingsValue(settings: Partial<Settings> | null | unde
     startHoldSeconds: clampHoldSeconds(settings?.startHoldSeconds, defaultSettings.startHoldSeconds),
     endHoldSeconds: clampHoldSeconds(settings?.endHoldSeconds, defaultSettings.endHoldSeconds),
     surname: String(settings?.surname || '').trim(),
-    accentColor: normalizeAccentColor(settings?.accentColor),
-    notificationsEnabled: settings?.notificationsEnabled === true,
-    shiftEndReminderEnabled:
-      settings?.shiftEndReminderEnabled === undefined
-        ? defaultSettings.shiftEndReminderEnabled
-        : settings.shiftEndReminderEnabled === true,
-    shiftEndReminderHours: clampNumber(settings?.shiftEndReminderHours, defaultSettings.shiftEndReminderHours, 1, 16),
-    shiftEndReminderRepeatMinutes: clampNumber(
-      settings?.shiftEndReminderRepeatMinutes,
-      defaultSettings.shiftEndReminderRepeatMinutes,
-      5,
-      120
-    )
+    accentColor: normalizeAccentColor(settings?.accentColor)
   };
 }

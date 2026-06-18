@@ -15,11 +15,7 @@ describe('settings model', () => {
       startHoldSeconds: 10,
       endHoldSeconds: 1,
       surname: 'Петренко',
-      accentColor: 'green',
-      notificationsEnabled: false,
-      shiftEndReminderEnabled: true,
-      shiftEndReminderHours: 8,
-      shiftEndReminderRepeatMinutes: 15
+      accentColor: 'green'
     });
   });
 
@@ -29,11 +25,7 @@ describe('settings model', () => {
       startHoldSeconds: 3,
       endHoldSeconds: 5,
       surname: '',
-      accentColor: 'green',
-      notificationsEnabled: false,
-      shiftEndReminderEnabled: true,
-      shiftEndReminderHours: 8,
-      shiftEndReminderRepeatMinutes: 15
+      accentColor: 'green'
     });
   });
 
@@ -55,31 +47,4 @@ describe('settings model', () => {
     });
   });
 
-  it('clamps notification reminder values', () => {
-    expect(
-      normalizeSettingsValue({
-        notificationsEnabled: true,
-        shiftEndReminderEnabled: false,
-        shiftEndReminderHours: 99,
-        shiftEndReminderRepeatMinutes: -4
-      })
-    ).toMatchObject({
-      notificationsEnabled: true,
-      shiftEndReminderEnabled: false,
-      shiftEndReminderHours: 16,
-      shiftEndReminderRepeatMinutes: 5
-    });
-  });
-
-  it('keeps valid notification reminder values', () => {
-    expect(
-      normalizeSettingsValue({
-        shiftEndReminderHours: 6,
-        shiftEndReminderRepeatMinutes: 30
-      })
-    ).toMatchObject({
-      shiftEndReminderHours: 6,
-      shiftEndReminderRepeatMinutes: 30
-    });
-  });
 });

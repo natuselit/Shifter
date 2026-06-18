@@ -1,19 +1,19 @@
 import { useMemo, useState } from 'react';
+import { storage, useStore } from '@/entities/app-state';
 import {
   createShiftId,
   detectShiftType,
   getDateKey,
   hasShiftOnDate,
   normalizeRateMultiplier,
-  normalizeShiftType
-} from '../../entities/shift/model';
-import type { ActiveShift, RateMultiplier, Shift, ShiftType } from '../../entities/shift/types';
-import { formatMonth } from '../../shared/lib/format';
-import { normalizeNonNegativeNumber } from '../../shared/lib/number';
-import { storage } from '../../shared/storage/local-storage';
-import { useStore } from '../../app/providers/store-provider';
-import { useToast } from '../../widgets/toast/toast-provider';
-import { CalendarGrid } from '../../widgets/calendar/calendar-grid';
+  normalizeShiftType,
+  type ActiveShift,
+  type RateMultiplier,
+  type Shift,
+  type ShiftType
+} from '@/entities/shift';
+import { formatMonth, normalizeNonNegativeNumber } from '@/shared/lib';
+import { CalendarGrid, useToast } from '@/shared/ui';
 
 interface EditShiftFormProps {
   shift: Shift | ActiveShift;
@@ -286,9 +286,9 @@ export function EditShiftForm({ shift, mode = 'edit', onCancel, onSaved }: EditS
         {!isActive && renderTimePicker('Вихід', endedTime, 'end', setEndedTime)}
       </div>
       {!isActive && (
-        <div className="shift-type-control">
-          <span>Тип зміни</span>
-          <div className="segmented-control">
+        <fieldset className="shift-type-control">
+          <legend>Тип зміни</legend>
+          <div className="segmented-control" role="radiogroup" aria-label="Тип зміни">
             {(['1 зміна', '2 зміна'] as const).map((label) => (
               <label key={label}>
                 <input
@@ -302,7 +302,7 @@ export function EditShiftForm({ shift, mode = 'edit', onCancel, onSaved }: EditS
               </label>
             ))}
           </div>
-        </div>
+        </fieldset>
       )}
       <label>
         Ставка, грн/год
@@ -315,9 +315,9 @@ export function EditShiftForm({ shift, mode = 'edit', onCancel, onSaved }: EditS
           inputMode="decimal"
         />
       </label>
-      <div className="shift-type-control">
-        <span>Коефіцієнт</span>
-        <div className="segmented-control segmented-control-three">
+      <fieldset className="shift-type-control">
+        <legend>Коефіцієнт</legend>
+        <div className="segmented-control segmented-control-three" role="radiogroup" aria-label="Коефіцієнт">
           {([1, 1.5, 2] as const).map((multiplier) => (
             <label key={multiplier}>
               <input
@@ -331,7 +331,7 @@ export function EditShiftForm({ shift, mode = 'edit', onCancel, onSaved }: EditS
             </label>
           ))}
         </div>
-      </div>
+      </fieldset>
       <p className="form-error" hidden={!error}>
         {error}
       </p>

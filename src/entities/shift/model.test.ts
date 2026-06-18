@@ -22,6 +22,20 @@ describe('shift model', () => {
     expect(calculatePay(shift)).toBe(950);
   });
 
+  it('uses saved shift type for the pay window', () => {
+    const shift = {
+      id: '1',
+      startedAt: new Date(2026, 5, 15, 14, 0).getTime(),
+      endedAt: new Date(2026, 5, 15, 22, 30).getTime(),
+      rate: 100,
+      shiftType: '2 зміна' as const,
+      rateMultiplier: 1 as const,
+      doubleRate: false
+    };
+
+    expect(calculatePay(shift)).toBe(875);
+  });
+
   it('normalizes legacy shift values', () => {
     const normalized = normalizeShiftValue({
       startedAt: new Date(2026, 5, 15, 14, 30).getTime(),
