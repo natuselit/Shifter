@@ -23,7 +23,7 @@ describe('shift timer', () => {
       startHoldSeconds: 3,
       endHoldSeconds: 5,
       surname: '',
-      accentColor: 'green'
+      accentColor: 'yellow'
     };
     storage.shifts = [];
   });

@@ -1,10 +1,21 @@
-import { useEffect, useRef, useState, type CSSProperties } from 'react';
+import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { useSnapshot, useStore } from '@/entities/app-state';
-import { accentColorPresets, type AccentColor } from '@/entities/settings';
 import { exportBackup, importBackup } from '@/features/backup-data';
 import { saveSettingsValues, type SettingsFormValues } from '@/features/settings-form';
 import { normalizeNonNegativeNumber } from '@/shared/lib';
 import { useToast } from '@/shared/ui';
+
+const updatedAtFormatter = new Intl.DateTimeFormat('uk-UA', {
+  dateStyle: 'medium',
+  timeStyle: 'short'
+});
+
+function formatUpdatedAt(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+
+  return updatedAtFormatter.format(date);
+}
 
 export function SettingsPage() {
   const { settings } = useSnapshot();
@@ -14,22 +25,15 @@ export function SettingsPage() {
   const [rate, setRate] = useState(settings.rate ? String(settings.rate) : '');
   const [startHoldSeconds, setStartHoldSeconds] = useState(String(settings.startHoldSeconds));
   const [endHoldSeconds, setEndHoldSeconds] = useState(String(settings.endHoldSeconds));
-  const [accentColor, setAccentColor] = useState<AccentColor>(settings.accentColor);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const appUpdatedAt = formatUpdatedAt(__APP_UPDATED_AT__);
 
   useEffect(() => {
     setSurname(settings.surname);
     setRate(settings.rate ? String(settings.rate) : '');
     setStartHoldSeconds(String(settings.startHoldSeconds));
     setEndHoldSeconds(String(settings.endHoldSeconds));
-    setAccentColor(settings.accentColor);
-  }, [
-    settings.accentColor,
-    settings.endHoldSeconds,
-    settings.rate,
-    settings.startHoldSeconds,
-    settings.surname
-  ]);
+  }, [settings.endHoldSeconds, settings.rate, settings.startHoldSeconds, settings.surname]);
 
   function save(
     next: SettingsFormValues = {
@@ -37,23 +41,13 @@ export function SettingsPage() {
       rate: normalizeNonNegativeNumber(rate),
       startHoldSeconds,
       endHoldSeconds,
-      accentColor
+      accentColor: 'yellow'
     }
   ) {
     const normalized = saveSettingsValues(next);
     setStartHoldSeconds(String(normalized.startHoldSeconds));
     setEndHoldSeconds(String(normalized.endHoldSeconds));
     refresh();
-  }
-
-  function getBaseSettingsFormValues(): SettingsFormValues {
-    return {
-      surname,
-      rate: normalizeNonNegativeNumber(rate),
-      startHoldSeconds: Number(startHoldSeconds),
-      endHoldSeconds: Number(endHoldSeconds),
-      accentColor
-    };
   }
 
   async function handleImport(file: File | undefined) {
@@ -68,6 +62,10 @@ export function SettingsPage() {
     }
   }
 
+  function commitOnEnter(event: KeyboardEvent<HTMLInputElement>) {
+    if (event.key === 'Enter') event.currentTarget.blur();
+  }
+
   return (
     <main className="page">
       <header className="page-header">
@@ -79,14 +77,9 @@ export function SettingsPage() {
           Прізвище
           <input
             value={surname}
-            onChange={(event) => {
-              const value = event.target.value;
-              setSurname(value);
-              save({
-                ...getBaseSettingsFormValues(),
-                surname: value
-              });
-            }}
+            onChange={(event) => setSurname(event.target.value)}
+            onBlur={() => save()}
+            onKeyDown={commitOnEnter}
             type="text"
             autoComplete="family-name"
             placeholder="Прізвище"
@@ -96,46 +89,16 @@ export function SettingsPage() {
           Базова ставка, грн/год
           <input
             value={rate}
-            onChange={(event) => {
-              const value = event.target.value;
-              setRate(value);
-              save({
-                ...getBaseSettingsFormValues(),
-                rate: normalizeNonNegativeNumber(value)
-              });
-            }}
+            onChange={(event) => setRate(event.target.value)}
+            onBlur={() => save()}
+            onKeyDown={commitOnEnter}
             type="number"
             min="0"
-            step="0.01"
+            step="0.001"
             inputMode="decimal"
             placeholder="0"
           />
         </label>
-        <div className="accent-control">
-          <span>Акцентний колір</span>
-          <div className="accent-swatches" aria-label="Акцентний колір">
-            {accentColorPresets.map((preset) => (
-              <button
-                key={preset.id}
-                className={`accent-swatch ${accentColor === preset.id ? 'selected' : ''}`}
-                type="button"
-                aria-pressed={accentColor === preset.id}
-                aria-label={preset.label}
-                title={preset.label}
-                style={{ '--swatch-color': preset.primary } as CSSProperties}
-                onClick={() => {
-                  setAccentColor(preset.id);
-                  save({
-                    ...getBaseSettingsFormValues(),
-                    accentColor: preset.id
-                  });
-                }}
-              >
-                <span aria-hidden="true" />
-              </button>
-            ))}
-          </div>
-        </div>
         <label>
           Затримка початку, с
           <input
@@ -192,7 +155,17 @@ export function SettingsPage() {
             }}
           />
         </div>
-        <p className="saved">Збережено автоматично</p>
+        <div className="app-info" aria-label="Інформація про застосунок">
+          <strong>Застосунок</strong>
+          <div>
+            <span>Версія</span>
+            <b>v{__APP_VERSION__}</b>
+          </div>
+          <div>
+            <span>Оновлено</span>
+            <b>{appUpdatedAt}</b>
+          </div>
+        </div>
       </section>
     </main>
   );

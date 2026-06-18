@@ -34,4 +34,31 @@ describe('app-state storage', () => {
     expect(storage.startedAt).toBeNull();
     expect(localStorage.getItem('startedAt')).toBeNull();
   });
+
+  it('keeps cached shifts stable while raw storage is unchanged', () => {
+    const shift = {
+      id: '1',
+      startedAt: new Date(2026, 5, 15, 6, 30).getTime(),
+      endedAt: new Date(2026, 5, 15, 14, 30).getTime(),
+      rate: 100,
+      shiftType: '1 зміна',
+      rateMultiplier: 1,
+      doubleRate: false
+    };
+
+    localStorage.setItem('shifts', JSON.stringify([shift]));
+
+    const firstRead = storage.shifts;
+
+    expect(storage.shifts).toBe(firstRead);
+
+    storage.shifts = [...firstRead];
+
+    expect(storage.shifts).toBe(firstRead);
+
+    localStorage.setItem('shifts', JSON.stringify([{ ...shift, id: '2' }]));
+
+    expect(storage.shifts).not.toBe(firstRead);
+    expect(storage.shifts[0]?.id).toBe('2');
+  });
 });

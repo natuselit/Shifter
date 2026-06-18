@@ -1,39 +1,42 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { normalizeStoredData, storage } from './storage';
+import { normalizeStoredData, readStorageSnapshot, type StorageSnapshot } from './storage';
 
-interface StoreContextValue {
+interface StoreContextValue extends StorageSnapshot {
   version: number;
   refresh: () => void;
-  settings: typeof storage.settings;
-  shifts: typeof storage.shifts;
-  startedAt: number | null;
-  activeRate: number | null;
-  rateMultiplier: typeof storage.rateMultiplier;
 }
 
 const StoreContext = createContext<StoreContextValue | null>(null);
 
-export function StoreProvider({ children }: { children: ReactNode }) {
-  const [version, setVersion] = useState(0);
+function isSameSnapshot(first: StorageSnapshot, second: StorageSnapshot): boolean {
+  return (
+    first.settings === second.settings &&
+    first.shifts === second.shifts &&
+    first.startedAt === second.startedAt &&
+    first.activeRate === second.activeRate &&
+    first.rateMultiplier === second.rateMultiplier
+  );
+}
 
-  const refresh = useCallback(() => setVersion((current) => current + 1), []);
+export function StoreProvider({ children }: { children: ReactNode }) {
+  const [snapshot, setSnapshot] = useState(() => ({
+    version: 0,
+    ...readStorageSnapshot()
+  }));
+
+  const refresh = useCallback(() => {
+    setSnapshot((current) => {
+      const next = readStorageSnapshot();
+      if (isSameSnapshot(current, next)) return current;
+      return { version: current.version + 1, ...next };
+    });
+  }, []);
 
   useEffect(() => {
     normalizeStoredData();
     refresh();
   }, [refresh]);
 
-  const snapshot = useMemo(
-    () => ({
-      version,
-      settings: storage.settings,
-      shifts: storage.shifts,
-      startedAt: storage.startedAt,
-      activeRate: storage.activeRate,
-      rateMultiplier: storage.rateMultiplier
-    }),
-    [version]
-  );
   const value = useMemo(() => ({ refresh, ...snapshot }), [refresh, snapshot]);
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;

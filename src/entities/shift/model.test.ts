@@ -36,6 +36,20 @@ describe('shift model', () => {
     expect(calculatePay(shift)).toBe(875);
   });
 
+  it('keeps fractional rate precision in calculations', () => {
+    const shift = {
+      id: '1',
+      startedAt: new Date(2026, 5, 15, 6, 30).getTime(),
+      endedAt: new Date(2026, 5, 15, 14, 30).getTime(),
+      rate: 234.995,
+      shiftType: '1 зміна' as const,
+      rateMultiplier: 1 as const,
+      doubleRate: false
+    };
+
+    expect(calculatePay(shift)).toBe(1879.96);
+  });
+
   it('normalizes legacy shift values', () => {
     const normalized = normalizeShiftValue({
       startedAt: new Date(2026, 5, 15, 14, 30).getTime(),

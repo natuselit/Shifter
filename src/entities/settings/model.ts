@@ -9,10 +9,7 @@ export interface AccentColorPreset {
 }
 
 export const accentColorPresets: AccentColorPreset[] = [
-  { id: 'green', label: 'Зелений', primary: '#45d19e', primaryStrong: '#27b783', tile: '#213632' },
-  { id: 'yellow', label: 'Жовтий', primary: '#ffbf47', primaryStrong: '#e0a02b', tile: '#3b3320' },
-  { id: 'blue', label: 'Синій', primary: '#48b7ff', primaryStrong: '#2f94d8', tile: '#1f3342' },
-  { id: 'red', label: 'Червоний', primary: '#ff6464', primaryStrong: '#db4848', tile: '#3b2428' }
+  { id: 'yellow', label: 'Жовтий', primary: '#ffbf47', primaryStrong: '#e0a02b', tile: '#3b3320' }
 ];
 
 export const defaultSettings: Settings = {
@@ -20,13 +17,12 @@ export const defaultSettings: Settings = {
   startHoldSeconds: 3,
   endHoldSeconds: 5,
   surname: '',
-  accentColor: 'green'
+  accentColor: 'yellow'
 };
 
 export function normalizeAccentColor(value: unknown): AccentColor {
-  return accentColorPresets.some((preset) => preset.id === value)
-    ? (value as AccentColor)
-    : defaultSettings.accentColor;
+  void value;
+  return defaultSettings.accentColor;
 }
 
 export function getAccentColorPreset(value: unknown): AccentColorPreset {

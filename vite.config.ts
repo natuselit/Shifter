@@ -1,9 +1,14 @@
 import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
+import packageJson from './package.json';
 
 export default defineConfig({
   base: '/Shifter/',
+  define: {
+    __APP_VERSION__: JSON.stringify(packageJson.version),
+    __APP_UPDATED_AT__: JSON.stringify(new Date().toISOString())
+  },
   resolve: {
     alias: {
       '@': new URL('./src', import.meta.url).pathname

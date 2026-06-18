@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { storage, useSnapshot, useStore } from '@/entities/app-state';
 import { calculateLivePay, getShiftCopyText } from '@/entities/shift';
-import { copyText, formatDuration, formatMoney, formatTimeOnly } from '@/shared/lib';
+import { copyText, formatDuration, formatMoney, formatTimeOnly, useLiveNow } from '@/shared/lib';
 import { useToast } from '@/shared/ui';
 import { finishCurrentShift, startCurrentShift } from '../shift-timer';
 
@@ -9,20 +9,12 @@ export function TimerRing() {
   const { settings, startedAt, activeRate, rateMultiplier } = useSnapshot();
   const { refresh } = useStore();
   const { showToast } = useToast();
-  const [now, setNow] = useState(Date.now());
   const [holdStartedAt, setHoldStartedAt] = useState<number | null>(null);
   const [holdDuration, setHoldDuration] = useState(0);
   const holdTimeoutRef = useRef<number | null>(null);
   const active = Boolean(startedAt);
+  const now = useLiveNow(active);
   const rate = activeRate ?? settings.rate;
-
-  useEffect(() => {
-    if (!active) return undefined;
-
-    setNow(Date.now());
-    const interval = window.setInterval(() => setNow(Date.now()), 1000);
-    return () => window.clearInterval(interval);
-  }, [active]);
 
   useEffect(() => {
     return () => {

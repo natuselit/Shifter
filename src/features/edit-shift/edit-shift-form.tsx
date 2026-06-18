@@ -311,7 +311,7 @@ export function EditShiftForm({ shift, mode = 'edit', onCancel, onSaved }: EditS
           onChange={(event) => setRate(event.target.value)}
           type="number"
           min="0"
-          step="0.01"
+          step="0.001"
           inputMode="decimal"
         />
       </label>

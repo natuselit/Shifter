@@ -1,5 +1,32 @@
 import { getDateKey } from './date';
 
+const monthFormatter = new Intl.DateTimeFormat('uk-UA', {
+  month: 'long',
+  year: 'numeric'
+});
+const dateOnlyFormatter = new Intl.DateTimeFormat('uk-UA', {
+  day: '2-digit',
+  month: '2-digit',
+  year: 'numeric'
+});
+const shortDateFormatter = new Intl.DateTimeFormat('uk-UA', {
+  day: '2-digit',
+  month: '2-digit'
+});
+const timeOnlyFormatter = new Intl.DateTimeFormat('uk-UA', {
+  hour: '2-digit',
+  minute: '2-digit'
+});
+const moneyFormatter = new Intl.NumberFormat('uk-UA', {
+  style: 'currency',
+  currency: 'UAH',
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 0
+});
+const rateFormatter = new Intl.NumberFormat('uk-UA', {
+  maximumFractionDigits: 3
+});
+
 export function formatDuration(milliseconds: number): string {
   const totalSeconds = Math.max(0, Math.floor(milliseconds / 1000));
   const hours = String(Math.floor(totalSeconds / 3600)).padStart(2, '0');
@@ -16,32 +43,19 @@ export function formatHoursMinutes(milliseconds: number): string {
 }
 
 export function formatMonth(date: Date): string {
-  return new Intl.DateTimeFormat('uk-UA', {
-    month: 'long',
-    year: 'numeric'
-  }).format(date);
+  return monthFormatter.format(date);
 }
 
 export function formatDateOnly(timestamp: number): string {
-  return new Intl.DateTimeFormat('uk-UA', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric'
-  }).format(new Date(timestamp));
+  return dateOnlyFormatter.format(new Date(timestamp));
 }
 
 export function formatShortDate(timestamp: number): string {
-  return new Intl.DateTimeFormat('uk-UA', {
-    day: '2-digit',
-    month: '2-digit'
-  }).format(new Date(timestamp));
+  return shortDateFormatter.format(new Date(timestamp));
 }
 
 export function formatTimeOnly(timestamp: number): string {
-  return new Intl.DateTimeFormat('uk-UA', {
-    hour: '2-digit',
-    minute: '2-digit'
-  }).format(new Date(timestamp));
+  return timeOnlyFormatter.format(new Date(timestamp));
 }
 
 export function formatShiftPeriod(startedAt: number, endedAt: number): string {
@@ -53,15 +67,11 @@ export function formatShiftPeriod(startedAt: number, endedAt: number): string {
 }
 
 export function formatMoney(value: number): string {
-  return new Intl.NumberFormat('uk-UA', {
-    style: 'currency',
-    currency: 'UAH'
-  }).format(value);
+  const money = Math.floor(Math.max(0, Number(value) || 0));
+  return moneyFormatter.format(money);
 }
 
 export function formatRate(value: number): string {
   const rate = Number(value) || 0;
-  return `${new Intl.NumberFormat('uk-UA', {
-    maximumFractionDigits: 2
-  }).format(rate)} грн/год`;
+  return `${rateFormatter.format(rate)} грн/год`;
 }

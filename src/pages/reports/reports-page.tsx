@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ClipboardEvent } from 'react';
+import { useCallback, useDeferredValue, useEffect, useMemo, useState, type ClipboardEvent } from 'react';
 import { storage, useSnapshot, useStore } from '@/entities/app-state';
 import { detectShiftType, getDateKey, getTimestampFromDateKey, type ActiveShift, type Shift } from '@/entities/shift';
 import {
@@ -31,11 +31,12 @@ import {
   formatMoney,
   formatMonth,
   formatShortDate,
-  formatTimeOnly
+  formatTimeOnly,
+  useLiveNow
 } from '@/shared/lib';
 import { useConfirm, useToast } from '@/shared/ui';
 import { CalendarPanel } from '@/widgets/calendar';
-import { ShiftCard } from '@/widgets/shift-list';
+import { ShiftCard, VirtualShiftList } from '@/widgets/shift-list';
 
 export type ReportsView = 'shifts' | 'analytics';
 
@@ -137,8 +138,33 @@ function getStoredCalendarCollapsed(): boolean {
   return localStorage.getItem(reportsCalendarCollapsedKey) === 'true';
 }
 
+function LiveActiveShiftCard({
+  shift,
+  editingShiftId,
+  onEdit,
+  onCancel,
+  onSaved
+}: {
+  shift: ActiveShift;
+  editingShiftId: string | null;
+  onEdit: (shift: Shift | ActiveShift) => void;
+  onCancel: () => void;
+  onSaved: (savedShift: Shift | ActiveShift) => void;
+}) {
+  const now = useLiveNow(true);
+  const liveShift = useMemo(() => ({ ...shift, endedAt: now }), [now, shift]);
+
+  return (
+    <ShiftCard shift={liveShift} showActions onEdit={onEdit}>
+      {editingShiftId === shift.id && (
+        <EditShiftForm mode="active" shift={liveShift} onCancel={onCancel} onSaved={onSaved} />
+      )}
+    </ShiftCard>
+  );
+}
+
 export function ReportsPage({ view = 'shifts' }: { view?: ReportsView }) {
-  const { settings, shifts, startedAt, activeRate, rateMultiplier, refresh } = useSnapshot();
+  const { settings, shifts, startedAt, activeRate, rateMultiplier } = useSnapshot();
   const { refresh: forceRefresh } = useStore();
   const { showToast } = useToast();
   const { confirmAction } = useConfirm();
@@ -150,17 +176,11 @@ export function ReportsPage({ view = 'shifts' }: { view?: ReportsView }) {
   const [creatingShift, setCreatingShift] = useState(false);
   const [chartMode, setChartMode] = useState<ChartMode>('pay');
   const [scheduleText, setScheduleText] = useState(getStoredScheduleText);
+  const deferredScheduleText = useDeferredValue(scheduleText);
 
   useEffect(() => {
     localStorage.setItem(reportsCalendarCollapsedKey, String(calendarCollapsed));
   }, [calendarCollapsed]);
-
-  useEffect(() => {
-    const interval = window.setInterval(() => {
-      if (storage.startedAt && !editingShiftId) refresh();
-    }, 1000);
-    return () => window.clearInterval(interval);
-  }, [editingShiftId, refresh]);
 
   const range = useMemo(() => getRangeKeys(rangeState), [rangeState]);
   const rangeLabel = useMemo(() => getRangeLabel(rangeState), [rangeState]);
@@ -171,7 +191,6 @@ export function ReportsPage({ view = 'shifts' }: { view?: ReportsView }) {
     year: today.getFullYear(),
     month: today.getMonth()
   };
-  const activeEndedAt = startedAt ? Date.now() : 0;
   const activeShift = useMemo<ActiveShift | null>(
     () =>
       startedAt
@@ -179,26 +198,31 @@ export function ReportsPage({ view = 'shifts' }: { view?: ReportsView }) {
             id: '__active_shift__',
             active: true,
             startedAt,
-            endedAt: activeEndedAt,
+            endedAt: startedAt,
             rate: activeRate ?? settings.rate,
             shiftType: detectShiftType(startedAt),
             rateMultiplier,
             doubleRate: rateMultiplier === 2
           }
         : null,
-    [activeEndedAt, activeRate, rateMultiplier, settings.rate, startedAt]
+    [activeRate, rateMultiplier, settings.rate, startedAt]
   );
-  const allHistoryShifts = useMemo(() => (activeShift ? [activeShift, ...shifts] : shifts), [activeShift, shifts]);
+  const activeHistoryShift = useMemo(() => {
+    if (!activeShift) return null;
+    if (range) return filterShiftsByRange([activeShift], rangeState)[0] || null;
+    if (selectedDateKey) return getDateKey(activeShift.startedAt) === selectedDateKey ? activeShift : null;
+    return activeShift;
+  }, [activeShift, range, rangeState, selectedDateKey]);
   const reportShifts = useMemo(() => {
     if (range) return filterShiftsByRange(shifts, rangeState);
     if (selectedDateKey) return shifts.filter((shift) => getDateKey(shift.startedAt) === selectedDateKey);
     return getMonthShifts(shifts, visibleMonth);
   }, [range, rangeState, selectedDateKey, shifts, visibleMonth]);
   const historyVisibleShifts = useMemo(() => {
-    if (range) return filterShiftsByRange(allHistoryShifts, rangeState);
-    if (selectedDateKey) return allHistoryShifts.filter((shift) => getDateKey(shift.startedAt) === selectedDateKey);
-    return allHistoryShifts;
-  }, [allHistoryShifts, range, rangeState, selectedDateKey]);
+    if (range) return filterShiftsByRange(shifts, rangeState);
+    if (selectedDateKey) return shifts.filter((shift) => getDateKey(shift.startedAt) === selectedDateKey);
+    return shifts;
+  }, [range, rangeState, selectedDateKey, shifts]);
   const shiftDateKeys = useMemo(() => {
     const keys = new Set(shifts.map((shift) => getDateKey(shift.startedAt)));
     if (startedAt) keys.add(getDateKey(startedAt));
@@ -248,7 +272,7 @@ export function ReportsPage({ view = 'shifts' }: { view?: ReportsView }) {
     setCreatingShift(false);
   }
 
-  async function clearHistory() {
+  const clearHistory = useCallback(async () => {
     if (!(await confirmAction('Очистити всю історію?'))) return;
     storage.shifts = [];
     storage.lastShift = null;
@@ -258,9 +282,9 @@ export function ReportsPage({ view = 'shifts' }: { view?: ReportsView }) {
     setEditingShiftId(null);
     forceRefresh();
     showToast('Історію очищено', 'success');
-  }
+  }, [confirmAction, forceRefresh, showToast]);
 
-  async function deleteShift(shift: Shift) {
+  const deleteShift = useCallback(async (shift: Shift) => {
     if (!(await confirmAction('Видалити цю зміну?'))) return;
     const nextShifts = storage.shifts.filter((savedShift) => savedShift.id !== shift.id);
     storage.shifts = nextShifts;
@@ -268,9 +292,46 @@ export function ReportsPage({ view = 'shifts' }: { view?: ReportsView }) {
     if (editingShiftId === shift.id) setEditingShiftId(null);
     forceRefresh();
     showToast('Зміну видалено', 'success');
-  }
+  }, [confirmAction, editingShiftId, forceRefresh, showToast]);
 
-  const scheduleParseResult = useMemo(() => parseScheduleText(scheduleText), [scheduleText]);
+  const handleEditShift = useCallback((shift: Shift | ActiveShift) => {
+    setCreatingShift(false);
+    setEditingShiftId(shift.id);
+  }, []);
+  const handleCancelEdit = useCallback(() => setEditingShiftId(null), []);
+  const handleShiftSaved = useCallback((savedShift: Shift | ActiveShift) => {
+    setEditingShiftId(null);
+    setSelectedDateKey(getDateKey(savedShift.startedAt));
+    setVisibleMonth(new Date(new Date(savedShift.startedAt).getFullYear(), new Date(savedShift.startedAt).getMonth(), 1));
+  }, []);
+  const handleDeleteShift = useCallback(
+    (shift: Shift | ActiveShift) => {
+      if (!('active' in shift)) void deleteShift(shift);
+    },
+    [deleteShift]
+  );
+  const renderHistoryShift = useCallback(
+    (shift: Shift) => (
+      <ShiftCard key={shift.id} shift={shift} showActions onEdit={handleEditShift} onDelete={handleDeleteShift}>
+        {editingShiftId === shift.id && (
+          <EditShiftForm mode="edit" shift={shift} onCancel={handleCancelEdit} onSaved={handleShiftSaved} />
+        )}
+      </ShiftCard>
+    ),
+    [editingShiftId, handleCancelEdit, handleDeleteShift, handleEditShift, handleShiftSaved]
+  );
+  const activeHistoryCard = activeHistoryShift ? (
+    <LiveActiveShiftCard
+      key={activeHistoryShift.id}
+      shift={activeHistoryShift}
+      editingShiftId={editingShiftId}
+      onEdit={handleEditShift}
+      onCancel={handleCancelEdit}
+      onSaved={handleShiftSaved}
+    />
+  ) : null;
+  const hasVisibleHistory = Boolean(activeHistoryShift) || historyVisibleShifts.length > 0;
+  const scheduleParseResult = useMemo(() => parseScheduleText(deferredScheduleText), [deferredScheduleText]);
   const analytics = useMemo<ReportAnalytics | null>(() => {
     if (view !== 'analytics') return null;
 
@@ -368,9 +429,10 @@ export function ReportsPage({ view = 'shifts' }: { view?: ReportsView }) {
   }
 
   async function syncScheduleText() {
-    if (!scheduleText.trim() || scheduleParseResult.errors.length > 0) return;
+    const currentScheduleParseResult = parseScheduleText(scheduleText);
+    if (!scheduleText.trim() || currentScheduleParseResult.errors.length > 0) return;
 
-    const shiftSync = syncShiftsWithScheduleEntries(scheduleParseResult.entries, storage.shifts, settings.rate);
+    const shiftSync = syncShiftsWithScheduleEntries(currentScheduleParseResult.entries, storage.shifts, settings.rate);
     const shiftChangedCount = shiftSync.createdKeys.length + shiftSync.updatedKeys.length;
     const confirmed = await confirmAction(
       `Синхронізувати графік? Змін у журналі: ${shiftChangedCount}. Пропущено днів: ${shiftSync.skippedKeys.length}.`
@@ -468,40 +530,8 @@ export function ReportsPage({ view = 'shifts' }: { view?: ReportsView }) {
                 </button>
               </div>
             </div>
-            <ul className="history">
-              {historyVisibleShifts.map((shift) => (
-                <ShiftCard
-                  key={shift.id}
-                  shift={shift}
-                  showActions
-                  onEdit={() => {
-                    setCreatingShift(false);
-                    setEditingShiftId(shift.id);
-                  }}
-                  onDelete={() => !('active' in shift) && void deleteShift(shift)}
-                >
-                  {editingShiftId === shift.id && (
-                    <EditShiftForm
-                      mode={'active' in shift ? 'active' : 'edit'}
-                      shift={shift}
-                      onCancel={() => setEditingShiftId(null)}
-                      onSaved={(savedShift) => {
-                        setEditingShiftId(null);
-                        setSelectedDateKey(getDateKey(savedShift.startedAt));
-                        setVisibleMonth(
-                          new Date(
-                            new Date(savedShift.startedAt).getFullYear(),
-                            new Date(savedShift.startedAt).getMonth(),
-                            1
-                          )
-                        );
-                      }}
-                    />
-                  )}
-                </ShiftCard>
-              ))}
-            </ul>
-            <p className="empty" hidden={historyVisibleShifts.length > 0}>
+            <VirtualShiftList before={activeHistoryCard} shifts={historyVisibleShifts} renderShift={renderHistoryShift} />
+            <p className="empty" hidden={hasVisibleHistory}>
               {range
                 ? 'За цей період записів немає.'
                 : selectedDateKey

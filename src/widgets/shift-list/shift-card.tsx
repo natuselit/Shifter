@@ -1,5 +1,5 @@
 import { ArrowLeftRight, Clock3, DollarSign, Pencil, Trash2 } from 'lucide-react';
-import { useEffect, useRef, useState, type CSSProperties, type PointerEvent, type ReactNode } from 'react';
+import { memo, useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent, type ReactNode } from 'react';
 import { calculatePayBreakdown, normalizeRateMultiplier, type ActiveShift, type Shift } from '@/entities/shift';
 import { formatDateOnly, formatHoursMinutes, formatMoney, formatRate, formatTimeOnly } from '@/shared/lib';
 
@@ -7,11 +7,11 @@ interface ShiftCardProps {
   shift: Shift | ActiveShift;
   children?: ReactNode;
   showActions?: boolean;
-  onEdit?: () => void;
-  onDelete?: () => void;
+  onEdit?: (shift: Shift | ActiveShift) => void;
+  onDelete?: (shift: Shift | ActiveShift) => void;
 }
 
-export function ShiftCard({ shift, children, showActions = false, onEdit, onDelete }: ShiftCardProps) {
+function ShiftCardView({ shift, children, showActions = false, onEdit, onDelete }: ShiftCardProps) {
   const startX = useRef(0);
   const startY = useRef(0);
   const isDragging = useRef(false);
@@ -22,11 +22,17 @@ export function ShiftCard({ shift, children, showActions = false, onEdit, onDele
   const [isSwiping, setIsSwiping] = useState(false);
   const shiftType = shift.shiftType;
   const multiplier = normalizeRateMultiplier(shift.rateMultiplier ?? (shift.doubleRate ? 2 : 1));
-  const payBreakdown = calculatePayBreakdown(shift);
+  const payBreakdown = useMemo(() => calculatePayBreakdown(shift), [shift]);
   const hasManualMultiplier = payBreakdown.rateMultiplier !== 1;
-  const basePay = (payBreakdown.baseMs / 3600000) * shift.rate;
-  const overtimePay = (payBreakdown.overtimeMs / 3600000) * shift.rate * 1.5;
-  const multiplierPay = (payBreakdown.multiplierMs / 3600000) * shift.rate * payBreakdown.rateMultiplier;
+  const basePay = useMemo(() => (payBreakdown.baseMs / 3600000) * shift.rate, [payBreakdown.baseMs, shift.rate]);
+  const overtimePay = useMemo(
+    () => (payBreakdown.overtimeMs / 3600000) * shift.rate * 1.5,
+    [payBreakdown.overtimeMs, shift.rate]
+  );
+  const multiplierPay = useMemo(
+    () => (payBreakdown.multiplierMs / 3600000) * shift.rate * payBreakdown.rateMultiplier,
+    [payBreakdown.multiplierMs, payBreakdown.rateMultiplier, shift.rate]
+  );
   const isActive = 'active' in shift && shift.active;
   const canDelete = showActions && !isActive;
   const editSwipeWidth = showActions ? 46 : 0;
@@ -138,7 +144,7 @@ export function ShiftCard({ shift, children, showActions = false, onEdit, onDele
   };
 
   return (
-    <li className={className}>
+    <article className={className} role="listitem">
       {showActions && (
         <div className="history-swipe-actions" aria-hidden={swipeOffset === 0}>
           <button
@@ -149,7 +155,7 @@ export function ShiftCard({ shift, children, showActions = false, onEdit, onDele
             tabIndex={swipeOffset > 0 ? 0 : -1}
             onClick={() => {
               closeSwipe();
-              onEdit?.();
+              onEdit?.(shift);
             }}
           >
             <Pencil size={18} />
@@ -163,7 +169,7 @@ export function ShiftCard({ shift, children, showActions = false, onEdit, onDele
               tabIndex={swipeOffset < 0 ? 0 : -1}
               onClick={() => {
                 closeSwipe();
-                onDelete?.();
+                onDelete?.(shift);
               }}
             >
               <Trash2 size={18} />
@@ -235,6 +241,8 @@ export function ShiftCard({ shift, children, showActions = false, onEdit, onDele
         </div>
         {children}
       </div>
-    </li>
+    </article>
   );
 }
+
+export const ShiftCard = memo(ShiftCardView);

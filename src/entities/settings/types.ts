@@ -1,4 +1,4 @@
-export type AccentColor = 'green' | 'yellow' | 'blue' | 'red';
+export type AccentColor = 'yellow';
 
 export interface Settings {
   rate: number;

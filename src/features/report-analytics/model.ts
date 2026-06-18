@@ -15,6 +15,8 @@ export const chartModes: Array<{ value: ChartMode; label: string }> = [
   { value: 'hours', label: 'Години' }
 ];
 
+const percentFormatter = new Intl.NumberFormat('uk-UA', { maximumFractionDigits: 1 });
+
 export interface DayStats {
   pay: number;
   ms: number;
@@ -182,10 +184,7 @@ export function buildReportAnalytics({
   const shiftTypePercentages = ['1 зміна', '2 зміна', 'Поза графіком'].map((label) => {
     const count = shiftTypes.get(label) || 0;
     const percent = reportShifts.length > 0 ? (count / reportShifts.length) * 100 : 0;
-    return [label, `${count} · ${new Intl.NumberFormat('uk-UA', { maximumFractionDigits: 1 }).format(percent)}%`] as [
-      string,
-      string
-    ];
+    return [label, `${count} · ${percentFormatter.format(percent)}%`] as [string, string];
   });
 
   const getChartValue = (stats: { pay: number; ms: number } | undefined) => {

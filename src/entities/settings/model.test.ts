@@ -15,7 +15,7 @@ describe('settings model', () => {
       startHoldSeconds: 10,
       endHoldSeconds: 1,
       surname: 'Петренко',
-      accentColor: 'green'
+      accentColor: 'yellow'
     });
   });
 
@@ -25,7 +25,7 @@ describe('settings model', () => {
       startHoldSeconds: 3,
       endHoldSeconds: 5,
       surname: '',
-      accentColor: 'green'
+      accentColor: 'yellow'
     });
   });
 
@@ -41,10 +41,9 @@ describe('settings model', () => {
     });
   });
 
-  it('falls back for unknown accent colors', () => {
-    expect(normalizeSettingsValue({ accentColor: 'purple' as never })).toMatchObject({
-      accentColor: 'green'
+  it.each(['green', 'blue', 'red', 'purple'])('normalizes legacy accent color %s to yellow', (accentColor) => {
+    expect(normalizeSettingsValue({ accentColor: accentColor as never })).toMatchObject({
+      accentColor: 'yellow'
     });
   });
-
 });

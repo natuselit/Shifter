@@ -6,20 +6,78 @@ import {
   type RateMultiplier,
   type Shift
 } from '@/entities/shift';
-import {
-  readJsonStorage,
-  readStorageItem,
-  removeStorageItem,
-  writeJsonStorage,
-  writeStorageItem
-} from '@/shared/storage';
+import { readStorageItem, removeStorageItem, writeStorageItem } from '@/shared/storage';
+
+interface CachedValue<T> {
+  raw: string | null;
+  value: T;
+}
+
+export interface StorageSnapshot {
+  settings: Settings;
+  shifts: Shift[];
+  startedAt: number | null;
+  activeRate: number | null;
+  rateMultiplier: RateMultiplier;
+}
+
+let settingsCache: CachedValue<Settings> | null = null;
+let shiftsCache: CachedValue<Shift[]> | null = null;
+let lastShiftCache: CachedValue<Shift | null> | null = null;
+
+function parseJsonValue<T>(raw: string | null, fallback: T): T {
+  try {
+    return raw === null ? fallback : (JSON.parse(raw) as T);
+  } catch {
+    return fallback;
+  }
+}
+
+function writeJsonRaw<T>(key: string, value: T): string {
+  const raw = JSON.stringify(value);
+  writeStorageItem(key, raw);
+  return raw;
+}
+
+function readSettings(): Settings {
+  const raw = readStorageItem('settings');
+  if (settingsCache?.raw === raw) return settingsCache.value;
+
+  const value = normalizeSettingsValue(parseJsonValue<Partial<Settings>>(raw, {}));
+  settingsCache = { raw, value };
+  return value;
+}
+
+function readLastShift(): Shift | null {
+  const raw = readStorageItem('lastShift');
+  if (lastShiftCache?.raw === raw) return lastShiftCache.value;
+
+  const value = normalizeShiftValue(parseJsonValue<unknown>(raw, null));
+  lastShiftCache = { raw, value };
+  return value;
+}
+
+function readShifts(): Shift[] {
+  const raw = readStorageItem('shifts');
+  if (shiftsCache?.raw === raw) return shiftsCache.value;
+
+  const rawShifts = parseJsonValue<unknown>(raw, []);
+  const value = Array.isArray(rawShifts)
+    ? rawShifts.map((shift, index) => normalizeShiftValue(shift, index)).filter((shift): shift is Shift => Boolean(shift))
+    : [];
+
+  shiftsCache = { raw, value };
+  return value;
+}
 
 export const storage = {
   get settings(): Settings {
-    return normalizeSettingsValue(readJsonStorage<Partial<Settings>>('settings', {}));
+    return readSettings();
   },
   set settings(value: Settings) {
-    writeJsonStorage('settings', value);
+    const settings = normalizeSettingsValue(value);
+    const raw = writeJsonRaw('settings', settings);
+    settingsCache = settingsCache?.raw === raw ? { raw, value: settingsCache.value } : { raw, value: settings };
   },
   get startedAt(): number | null {
     const value = Number(readStorageItem('startedAt'));
@@ -47,21 +105,24 @@ export const storage = {
     else removeStorageItem('activeRate');
   },
   get lastShift(): Shift | null {
-    return normalizeShiftValue(readJsonStorage<unknown>('lastShift', null));
+    return readLastShift();
   },
   set lastShift(value: Shift | null) {
-    if (value) writeJsonStorage('lastShift', value);
-    else removeStorageItem('lastShift');
+    if (value) {
+      const raw = writeJsonRaw('lastShift', value);
+      lastShiftCache = lastShiftCache?.raw === raw ? { raw, value: lastShiftCache.value } : { raw, value };
+    } else {
+      removeStorageItem('lastShift');
+      lastShiftCache = { raw: null, value: null };
+    }
   },
   get shifts(): Shift[] {
-    const shifts = readJsonStorage<unknown>('shifts', []);
-    if (!Array.isArray(shifts)) return [];
-    return shifts
-      .map((shift, index) => normalizeShiftValue(shift, index))
-      .filter((shift): shift is Shift => Boolean(shift));
+    return readShifts();
   },
   set shifts(value: Shift[]) {
-    writeJsonStorage('shifts', value);
+    const shifts = [...value];
+    const raw = writeJsonRaw('shifts', shifts);
+    shiftsCache = shiftsCache?.raw === raw ? { raw, value: shiftsCache.value } : { raw, value: shifts };
   },
   get doubleRate(): boolean {
     return readStorageItem('doubleRate') === 'true';
@@ -80,6 +141,16 @@ export const storage = {
     writeStorageItem('doubleRate', String(multiplier === 2));
   }
 };
+
+export function readStorageSnapshot(): StorageSnapshot {
+  return {
+    settings: storage.settings,
+    shifts: storage.shifts,
+    startedAt: storage.startedAt,
+    activeRate: storage.activeRate,
+    rateMultiplier: storage.rateMultiplier
+  };
+}
 
 export function normalizeStoredData(): void {
   const settings = storage.settings;
