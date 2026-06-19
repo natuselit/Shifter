@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { calculatePay, detectShiftType, normalizeShiftValue } from './model';
+import { calculatePay, detectShiftType, hasShiftOnDate, normalizeShiftValue } from './model';
 
 describe('shift model', () => {
   it('detects shift types by start time', () => {
@@ -64,5 +64,21 @@ describe('shift model', () => {
       rateMultiplier: 2,
       doubleRate: true
     });
+  });
+
+  it('finds shifts on a date while respecting ignored ids', () => {
+    const shift = {
+      id: '1',
+      startedAt: new Date(2026, 5, 15, 23, 30).getTime(),
+      endedAt: new Date(2026, 5, 16, 1, 30).getTime(),
+      rate: 100,
+      shiftType: 'Поза графіком' as const,
+      rateMultiplier: 1 as const,
+      doubleRate: false
+    };
+
+    expect(hasShiftOnDate([shift], '2026-06-15')).toBe(true);
+    expect(hasShiftOnDate([shift], '2026-06-15', shift.id)).toBe(false);
+    expect(hasShiftOnDate([shift], 'bad-date')).toBe(false);
   });
 });

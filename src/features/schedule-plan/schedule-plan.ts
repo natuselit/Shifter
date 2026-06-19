@@ -3,6 +3,19 @@ import { getDateKey, getTimestampFromDateKey, normalizeNonNegativeNumber } from 
 import { readStorageItem, removeStorageItem, writeStorageItem } from '@/shared/storage';
 
 const scheduleTextStorageKey = 'reportsScheduleText';
+const dateValuePattern = /^(\d{2})\.(\d{2})\.(\d{4})$/;
+const clockMinutesPattern = /^(\d{1,2}):(\d{2})$/;
+const durationPattern = /^(\d{1,3}):(\d{2})$/;
+const lineBreakPattern = /\r?\n/;
+const serviceRowPattern = /^Колонка\s+\d+:/i;
+const dateLinePattern = /^--(.+)--$/;
+const fieldLinePattern = /^(In time|Out time|Total):\s*(.*)$/i;
+const windowsNewLinePattern = /\r\n?/g;
+const horizontalSpacePattern = /[ \t]+/g;
+const dateTokenPattern = /\s*(--\d{2}\.\d{2}\.\d{4}--)\s*/g;
+const fieldTokenPattern = /\s*(In time|Out time|Total):\s*/gi;
+const indentedLinePattern = /\n[ \t]+/g;
+const blankLinesPattern = /\n{3,}/g;
 
 export interface ScheduleEntry {
   dateKey: string;
@@ -57,7 +70,7 @@ export function clearStoredScheduleText(): void {
 }
 
 function parseDateKey(value: string): string | null {
-  const match = value.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
+  const match = value.match(dateValuePattern);
   if (!match) return null;
 
   const [, rawDay, rawMonth, rawYear] = match;
@@ -74,7 +87,7 @@ function parseClockMinutes(value: string): number | null {
   const normalized = value.trim();
   if (!normalized || normalized === ':') return null;
 
-  const match = normalized.match(/^(\d{1,2}):(\d{2})$/);
+  const match = normalized.match(clockMinutesPattern);
   if (!match) return Number.NaN;
 
   const hours = Number(match[1]);
@@ -87,7 +100,7 @@ function parseDurationMs(value: string): number | null {
   const normalized = value.trim();
   if (!normalized || normalized === ':') return null;
 
-  const match = normalized.match(/^(\d{1,3}):(\d{2})$/);
+  const match = normalized.match(durationPattern);
   if (!match) return Number.NaN;
 
   const hours = Number(match[1]);
@@ -100,54 +113,54 @@ export function parseScheduleText(text: string): ScheduleParseResult {
   const entries = new Map<string, ScheduleEntry>();
   const errors: string[] = [];
   let currentDateKey: string | null = null;
+  const lines = String(text || '').split(lineBreakPattern);
 
-  String(text || '')
-    .split(/\r?\n/)
-    .forEach((rawLine, index) => {
-      const line = rawLine.trim();
-      if (!line || /^Колонка\s+\d+:/i.test(line)) return;
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index].trim();
+    if (!line || serviceRowPattern.test(line)) continue;
 
-      const dateMatch = line.match(/^--(.+)--$/);
-      if (dateMatch) {
-        const dateKey = parseDateKey(dateMatch[1].trim());
-        if (!dateKey) {
-          errors.push(`Рядок ${index + 1}: неправильна дата`);
-          currentDateKey = null;
-          return;
-        }
-
-        currentDateKey = dateKey;
-        entries.set(dateKey, {
-          dateKey,
-          plannedInMinutes: null,
-          plannedOutMinutes: null,
-          plannedTotalMs: null
-        });
-        return;
+    const dateMatch = line.match(dateLinePattern);
+    if (dateMatch) {
+      const dateKey = parseDateKey(dateMatch[1].trim());
+      if (!dateKey) {
+        errors.push(`Рядок ${index + 1}: неправильна дата`);
+        currentDateKey = null;
+        continue;
       }
 
-      if (!currentDateKey) return;
-      const entry = entries.get(currentDateKey);
-      if (!entry) return;
+      currentDateKey = dateKey;
+      entries.set(dateKey, {
+        dateKey,
+        plannedInMinutes: null,
+        plannedOutMinutes: null,
+        plannedTotalMs: null
+      });
+      continue;
+    }
 
-      const fieldMatch = line.match(/^(In time|Out time|Total):\s*(.*)$/i);
-      if (!fieldMatch) return;
+    if (!currentDateKey) continue;
+    const entry = entries.get(currentDateKey);
+    if (!entry) continue;
 
-      const [, field, value] = fieldMatch;
-      if (/^In time$/i.test(field)) {
-        const minutes = parseClockMinutes(value);
-        if (Number.isNaN(minutes)) errors.push(`Рядок ${index + 1}: неправильний In time`);
-        else entry.plannedInMinutes = minutes;
-      } else if (/^Out time$/i.test(field)) {
-        const minutes = parseClockMinutes(value);
-        if (Number.isNaN(minutes)) errors.push(`Рядок ${index + 1}: неправильний Out time`);
-        else entry.plannedOutMinutes = minutes;
-      } else {
-        const durationMs = parseDurationMs(value);
-        if (Number.isNaN(durationMs)) errors.push(`Рядок ${index + 1}: неправильний Total`);
-        else entry.plannedTotalMs = durationMs;
-      }
-    });
+    const fieldMatch = line.match(fieldLinePattern);
+    if (!fieldMatch) continue;
+
+    const [, field, value] = fieldMatch;
+    const normalizedField = field.toLowerCase();
+    if (normalizedField === 'in time') {
+      const minutes = parseClockMinutes(value);
+      if (Number.isNaN(minutes)) errors.push(`Рядок ${index + 1}: неправильний In time`);
+      else entry.plannedInMinutes = minutes;
+    } else if (normalizedField === 'out time') {
+      const minutes = parseClockMinutes(value);
+      if (Number.isNaN(minutes)) errors.push(`Рядок ${index + 1}: неправильний Out time`);
+      else entry.plannedOutMinutes = minutes;
+    } else {
+      const durationMs = parseDurationMs(value);
+      if (Number.isNaN(durationMs)) errors.push(`Рядок ${index + 1}: неправильний Total`);
+      else entry.plannedTotalMs = durationMs;
+    }
+  }
 
   return { entries: Array.from(entries.values()), errors };
 }
@@ -201,12 +214,12 @@ export function formatScheduleEntries(entries: ScheduleEntry[]): string {
 
 export function formatScheduleTextInput(text: string): string {
   const normalized = String(text || '')
-    .replace(/\r\n?/g, '\n')
-    .replace(/[ \t]+/g, ' ')
-    .replace(/\s*(--\d{2}\.\d{2}\.\d{4}--)\s*/g, '\n\n$1\n')
-    .replace(/\s*(In time|Out time|Total):\s*/gi, (_, field: string) => `\n${field}: `)
-    .replace(/\n[ \t]+/g, '\n')
-    .replace(/\n{3,}/g, '\n\n')
+    .replace(windowsNewLinePattern, '\n')
+    .replace(horizontalSpacePattern, ' ')
+    .replace(dateTokenPattern, '\n\n$1\n')
+    .replace(fieldTokenPattern, (_, field: string) => `\n${field}: `)
+    .replace(indentedLinePattern, '\n')
+    .replace(blankLinesPattern, '\n\n')
     .trim();
 
   const result = parseScheduleText(normalized);

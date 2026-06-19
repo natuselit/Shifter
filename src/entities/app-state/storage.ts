@@ -11,6 +11,7 @@ import { readStorageItem, removeStorageItem, writeStorageItem } from '@/shared/s
 interface CachedValue<T> {
   raw: string | null;
   value: T;
+  signature?: string | null;
 }
 
 export interface StorageSnapshot {
@@ -39,6 +40,24 @@ function writeJsonRaw<T>(key: string, value: T): string {
   return raw;
 }
 
+function getShiftSignature(shift: Shift | null): string | null {
+  if (!shift) return null;
+
+  return [
+    `${shift.id.length}:${shift.id}`,
+    shift.startedAt,
+    shift.endedAt,
+    shift.rate,
+    shift.shiftType,
+    shift.rateMultiplier,
+    shift.doubleRate ? 1 : 0
+  ].join('|');
+}
+
+function getShiftsSignature(shifts: Shift[]): string {
+  return shifts.map((shift) => getShiftSignature(shift)).join('\n');
+}
+
 function readSettings(): Settings {
   const raw = readStorageItem('settings');
   if (settingsCache?.raw === raw) return settingsCache.value;
@@ -53,7 +72,7 @@ function readLastShift(): Shift | null {
   if (lastShiftCache?.raw === raw) return lastShiftCache.value;
 
   const value = normalizeShiftValue(parseJsonValue<unknown>(raw, null));
-  lastShiftCache = { raw, value };
+  lastShiftCache = { raw, value, signature: getShiftSignature(value) };
   return value;
 }
 
@@ -66,7 +85,7 @@ function readShifts(): Shift[] {
     ? rawShifts.map((shift, index) => normalizeShiftValue(shift, index)).filter((shift): shift is Shift => Boolean(shift))
     : [];
 
-  shiftsCache = { raw, value };
+  shiftsCache = { raw, value, signature: getShiftsSignature(value) };
   return value;
 }
 
@@ -132,8 +151,19 @@ export const storage = {
   },
   set lastShift(value: Shift | null) {
     if (value) {
+      const signature = getShiftSignature(value);
+      if (
+        lastShiftCache &&
+        lastShiftCache.raw !== null &&
+        lastShiftCache.signature === signature &&
+        readStorageItem('lastShift') === lastShiftCache.raw
+      ) {
+        return;
+      }
+
       const raw = writeJsonRaw('lastShift', value);
-      lastShiftCache = lastShiftCache?.raw === raw ? { raw, value: lastShiftCache.value } : { raw, value };
+      lastShiftCache =
+        lastShiftCache?.raw === raw ? { raw, value: lastShiftCache.value, signature } : { raw, value, signature };
     } else {
       removeStorageItem('lastShift');
       lastShiftCache = { raw: null, value: null };
@@ -144,8 +174,19 @@ export const storage = {
   },
   set shifts(value: Shift[]) {
     const shifts = [...value];
+    const signature = getShiftsSignature(shifts);
+    if (
+      shiftsCache &&
+      shiftsCache.raw !== null &&
+      shiftsCache.signature === signature &&
+      readStorageItem('shifts') === shiftsCache.raw
+    ) {
+      return;
+    }
+
     const raw = writeJsonRaw('shifts', shifts);
-    shiftsCache = shiftsCache?.raw === raw ? { raw, value: shiftsCache.value } : { raw, value: shifts };
+    shiftsCache =
+      shiftsCache?.raw === raw ? { raw, value: shiftsCache.value, signature } : { raw, value: shifts, signature };
   },
   get doubleRate(): boolean {
     return readStorageItem('doubleRate') === 'true';

@@ -119,4 +119,27 @@ function ShiftCardView({ shift, children, showActions = false, onEdit, onDelete 
   );
 }
 
-export const ShiftCard = memo(ShiftCardView);
+function areShiftsEqual(first: Shift | ActiveShift, second: Shift | ActiveShift) {
+  return (
+    first.id === second.id &&
+    first.startedAt === second.startedAt &&
+    first.endedAt === second.endedAt &&
+    first.rate === second.rate &&
+    first.shiftType === second.shiftType &&
+    first.rateMultiplier === second.rateMultiplier &&
+    first.doubleRate === second.doubleRate &&
+    ('active' in first && first.active) === ('active' in second && second.active)
+  );
+}
+
+function areShiftCardPropsEqual(first: ShiftCardProps, second: ShiftCardProps) {
+  return (
+    areShiftsEqual(first.shift, second.shift) &&
+    first.children === second.children &&
+    Boolean(first.showActions) === Boolean(second.showActions) &&
+    first.onEdit === second.onEdit &&
+    first.onDelete === second.onDelete
+  );
+}
+
+export const ShiftCard = memo(ShiftCardView, areShiftCardPropsEqual);

@@ -55,9 +55,17 @@ describe('app-state storage', () => {
 
     expect(storage.shifts).toBe(firstRead);
 
+    const stringify = vi.spyOn(JSON, 'stringify');
+    stringify.mockClear();
+
     storage.shifts = [...firstRead];
 
-    expect(storage.shifts).toBe(firstRead);
+    try {
+      expect(stringify).not.toHaveBeenCalled();
+      expect(storage.shifts).toBe(firstRead);
+    } finally {
+      stringify.mockRestore();
+    }
 
     localStorage.setItem('shifts', JSON.stringify([{ ...shift, id: '2' }]));
 

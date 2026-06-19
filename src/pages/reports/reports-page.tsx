@@ -1,4 +1,14 @@
-import { useCallback, useDeferredValue, useEffect, useMemo, useState, type ClipboardEvent } from 'react';
+import {
+  memo,
+  useCallback,
+  useDeferredValue,
+  useEffect,
+  useMemo,
+  useState,
+  type ChangeEvent,
+  type ClipboardEvent,
+  type MouseEvent
+} from 'react';
 import { storage, useSnapshot, useStore } from '@/entities/app-state';
 import {
   calculatePay,
@@ -45,8 +55,42 @@ export type ReportsView = 'shifts' | 'analytics';
 type ReportAnalytics = ReturnType<typeof buildReportAnalytics>;
 
 const emptyScheduleParseResult: ScheduleParseResult = { entries: [], errors: [] };
+const emptyChartDates: ReportAnalytics['chartDates'] = [];
+const emptyDayStats: ReportAnalytics['dayStats'] = new Map();
+const emptyScheduleDiffRows: ReportAnalytics['scheduleDiffRows'] = [];
+const emptyChartTitle: ReportAnalytics['getChartTitle'] = () => '';
+const emptyChartValue: ReportAnalytics['getChartValue'] = () => 0;
+const emptyPlannedChartValue: ReportAnalytics['getPlannedChartValue'] = () => 0;
+const scheduleParseDebounceMs = 180;
 
-function ScheduleDiffList({
+function useDebouncedValue<T>(value: T, delayMs: number): T {
+  const [debouncedValue, setDebouncedValue] = useState(value);
+
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => setDebouncedValue(value), delayMs);
+    return () => window.clearTimeout(timeoutId);
+  }, [delayMs, value]);
+
+  return debouncedValue;
+}
+
+function formatPlannedScheduleTime(minutes: number | null | undefined) {
+  if (minutes === null || minutes === undefined) return '-';
+  const hours = String(Math.floor(minutes / 60)).padStart(2, '0');
+  const normalizedMinutes = String(minutes % 60).padStart(2, '0');
+  return `${hours}:${normalizedMinutes}`;
+}
+
+function formatPlannedScheduleDuration(milliseconds: number | null | undefined) {
+  return milliseconds === null || milliseconds === undefined ? '-' : formatHoursMinutes(milliseconds);
+}
+
+function getScheduleDiffClass(milliseconds: number | null) {
+  if (milliseconds === null || milliseconds === 0) return 'schedule-diff-result';
+  return `schedule-diff-result ${milliseconds > 0 ? 'schedule-diff-plus' : 'schedule-diff-minus'}`;
+}
+
+const ScheduleDiffList = memo(function ScheduleDiffList({
   rows
 }: {
   rows: Array<{
@@ -63,22 +107,6 @@ function ScheduleDiffList({
     diff: { totalDiffMs: number | null; inDiffMs: number | null; outDiffMs: number | null };
   }>;
 }) {
-  function formatPlannedTime(minutes: number | null | undefined) {
-    if (minutes === null || minutes === undefined) return '-';
-    const hours = String(Math.floor(minutes / 60)).padStart(2, '0');
-    const normalizedMinutes = String(minutes % 60).padStart(2, '0');
-    return `${hours}:${normalizedMinutes}`;
-  }
-
-  function formatPlannedDuration(milliseconds: number | null | undefined) {
-    return milliseconds === null || milliseconds === undefined ? '-' : formatHoursMinutes(milliseconds);
-  }
-
-  function getDiffClass(milliseconds: number | null) {
-    if (milliseconds === null || milliseconds === 0) return 'schedule-diff-result';
-    return `schedule-diff-result ${milliseconds > 0 ? 'schedule-diff-plus' : 'schedule-diff-minus'}`;
-  }
-
   if (rows.length === 0) {
     return (
       <ul className="analytics-list">
@@ -104,28 +132,32 @@ function ScheduleDiffList({
             <span>Різниця</span>
 
             <strong>Разом</strong>
-            <b>{formatPlannedDuration(item.entry?.plannedTotalMs)}</b>
+            <b>{formatPlannedScheduleDuration(item.entry?.plannedTotalMs)}</b>
             <b>{formatHoursMinutes(Math.max(0, item.endedAt - item.timestamp))}</b>
-            <b className={getDiffClass(item.diff.totalDiffMs)}>{formatSignedHoursMinutes(item.diff.totalDiffMs)}</b>
+            <b className={getScheduleDiffClass(item.diff.totalDiffMs)}>
+              {formatSignedHoursMinutes(item.diff.totalDiffMs)}
+            </b>
 
             <strong>Прихід</strong>
-            <b>{formatPlannedTime(item.entry?.plannedInMinutes)}</b>
+            <b>{formatPlannedScheduleTime(item.entry?.plannedInMinutes)}</b>
             <b>{formatTimeOnly(item.timestamp)}</b>
-            <b className={getDiffClass(item.diff.inDiffMs)}>{formatSignedHoursMinutes(item.diff.inDiffMs)}</b>
+            <b className={getScheduleDiffClass(item.diff.inDiffMs)}>{formatSignedHoursMinutes(item.diff.inDiffMs)}</b>
 
             <strong>Вихід</strong>
-            <b>{formatPlannedTime(item.entry?.plannedOutMinutes)}</b>
+            <b>{formatPlannedScheduleTime(item.entry?.plannedOutMinutes)}</b>
             <b>{formatTimeOnly(item.endedAt)}</b>
-            <b className={getDiffClass(item.diff.outDiffMs)}>{formatSignedHoursMinutes(item.diff.outDiffMs)}</b>
+            <b className={getScheduleDiffClass(item.diff.outDiffMs)}>
+              {formatSignedHoursMinutes(item.diff.outDiffMs)}
+            </b>
           </div>
         </li>
       ))}
     </ul>
   );
-}
+});
 
 function LiveActiveShiftCard({ shift, onEdit }: { shift: ActiveShift; onEdit: (shift: Shift | ActiveShift) => void }) {
-  const now = useLiveNow(true);
+  const now = useLiveNow(true, 60_000);
   const liveShift = useMemo(() => ({ ...shift, endedAt: now }), [now, shift]);
 
   return <ShiftCard shift={liveShift} showActions onEdit={onEdit} />;
@@ -143,7 +175,8 @@ export function ReportsPage({ view = 'shifts' }: { view?: ReportsView }) {
   const [creatingShift, setCreatingShift] = useState(false);
   const [chartMode, setChartMode] = useState<ChartMode>('pay');
   const [scheduleText, setScheduleText] = useState(() => (view === 'analytics' ? getStoredScheduleText() : ''));
-  const deferredScheduleText = useDeferredValue(scheduleText);
+  const debouncedScheduleText = useDebouncedValue(scheduleText, scheduleParseDebounceMs);
+  const deferredScheduleText = useDeferredValue(debouncedScheduleText);
 
   useEffect(() => {
     if (view !== 'analytics') return;
@@ -211,12 +244,18 @@ export function ReportsPage({ view = 'shifts' }: { view?: ReportsView }) {
       ? `Зміни за ${formatDateOnly(getTimestampFromDateKey(selectedDateKey) || Date.now())}`
       : 'Усі зміни';
 
-  function chooseDate(date: Date, dateKey: string) {
+  const chooseDate = useCallback((date: Date, dateKey: string) => {
     setSelectedDateKey(dateKey);
     setRangeState((current) => getNextRangeState(current, dateKey));
     setVisibleMonth(new Date(date.getFullYear(), date.getMonth(), 1));
     setCreatingShift(false);
-  }
+  }, []);
+
+  const handleMonthChange = useCallback((month: Date) => {
+    setVisibleMonth(month);
+    setSelectedDateKey(null);
+    setCreatingShift(false);
+  }, []);
 
   const clearHistory = useCallback(async () => {
     if (!(await confirmAction('Очистити всю історію?'))) return;
@@ -282,13 +321,20 @@ export function ReportsPage({ view = 'shifts' }: { view?: ReportsView }) {
     ),
     [handleDeleteShift, handleEditShift]
   );
-  const activeHistoryCard = activeHistoryShift ? (
-    <LiveActiveShiftCard key={activeHistoryShift.id} shift={activeHistoryShift} onEdit={handleEditShift} />
-  ) : null;
-  const editingShift =
-    editingShiftId && activeShift?.id === editingShiftId
-      ? activeShift
-      : shifts.find((shift) => shift.id === editingShiftId) || null;
+  const activeHistoryCard = useMemo(
+    () =>
+      activeHistoryShift ? (
+        <LiveActiveShiftCard key={activeHistoryShift.id} shift={activeHistoryShift} onEdit={handleEditShift} />
+      ) : null,
+    [activeHistoryShift, handleEditShift]
+  );
+  const editingShift = useMemo(
+    () =>
+      editingShiftId && activeShift?.id === editingShiftId
+        ? activeShift
+        : shifts.find((shift) => shift.id === editingShiftId) || null,
+    [activeShift, editingShiftId, shifts]
+  );
 
   useEffect(() => {
     if (!editingShift) return undefined;
@@ -315,6 +361,7 @@ export function ReportsPage({ view = 'shifts' }: { view?: ReportsView }) {
     };
   }, [editingShift]);
   const hasVisibleHistory = Boolean(activeHistoryShift) || historyVisibleShifts.length > 0;
+  const isScheduleParsePending = view === 'analytics' && scheduleText !== deferredScheduleText;
   const scheduleParseResult = useMemo(
     () => (view === 'analytics' ? parseScheduleText(deferredScheduleText) : emptyScheduleParseResult),
     [deferredScheduleText, view]
@@ -330,9 +377,6 @@ export function ReportsPage({ view = 'shifts' }: { view?: ReportsView }) {
       chartMode
     });
   }, [chartMode, range, reportShifts, scheduleParseResult.entries, view, visibleMonth]);
-  const emptyChartDates = useMemo<ReportAnalytics['chartDates']>(() => [], []);
-  const emptyDayStats = useMemo<ReportAnalytics['dayStats']>(() => new Map(), []);
-  const emptyScheduleDiffRows = useMemo<ReportAnalytics['scheduleDiffRows']>(() => [], []);
   const analyticsTotalPay = analytics?.totalPay ?? 0;
   const analyticsTotalMs = analytics?.totalMs ?? 0;
   const averagePay = analytics?.averagePay ?? 0;
@@ -340,32 +384,55 @@ export function ReportsPage({ view = 'shifts' }: { view?: ReportsView }) {
   const averagePayPerHour = analytics?.averagePayPerHour ?? 0;
   const chartDates = analytics?.chartDates ?? emptyChartDates;
   const dayStats = analytics?.dayStats ?? emptyDayStats;
-  const getChartTitle = analytics?.getChartTitle ?? (() => '');
-  const getChartValue = analytics?.getChartValue ?? (() => 0);
-  const getPlannedChartValue = analytics?.getPlannedChartValue ?? (() => 0);
+  const getChartTitle = analytics?.getChartTitle ?? emptyChartTitle;
+  const getChartValue = analytics?.getChartValue ?? emptyChartValue;
+  const getPlannedChartValue = analytics?.getPlannedChartValue ?? emptyPlannedChartValue;
   const maxChartValue = analytics?.maxChartValue ?? 1;
   const scheduleDiffRows = analytics?.scheduleDiffRows ?? emptyScheduleDiffRows;
   const scheduleEntriesWithPlan = analytics?.scheduleEntriesWithPlan ?? 0;
+  const newShift = useMemo(() => getDefaultNewShift(selectedDateKey, settings.rate), [selectedDateKey, settings.rate]);
+  const topScheduleDiffRows = useMemo(
+    () =>
+      scheduleDiffRows.slice(0, 3).map((item) => ({
+        dateKey: item.dateKey,
+        timestamp: item.stats.timestamp,
+        endedAt: item.stats.endedAt,
+        entry: item.entry,
+        diff: item.diff
+      })),
+    [scheduleDiffRows]
+  );
 
-  function clearScheduleText() {
+  const clearScheduleText = useCallback(() => {
     setScheduleText('');
     clearStoredScheduleText();
     showToast('Графік очищено', 'success');
-  }
+  }, [showToast]);
 
-  function pasteScheduleText(event: ClipboardEvent<HTMLTextAreaElement>) {
-    const pastedText = event.clipboardData.getData('text');
-    if (!pastedText) return;
+  const handleClearHistoryClick = useCallback(() => {
+    void clearHistory();
+  }, [clearHistory]);
 
-    event.preventDefault();
-    const target = event.currentTarget;
-    const start = target.selectionStart;
-    const end = target.selectionEnd;
-    const nextText = `${scheduleText.slice(0, start)}${formatScheduleTextInput(pastedText)}${scheduleText.slice(end)}`;
-    setScheduleText(formatScheduleTextInput(nextText));
-  }
+  const pasteScheduleText = useCallback(
+    (event: ClipboardEvent<HTMLTextAreaElement>) => {
+      const pastedText = event.clipboardData.getData('text');
+      if (!pastedText) return;
 
-  async function syncScheduleText() {
+      event.preventDefault();
+      const target = event.currentTarget;
+      const start = target.selectionStart;
+      const end = target.selectionEnd;
+      const nextText = `${scheduleText.slice(0, start)}${pastedText}${scheduleText.slice(end)}`;
+      setScheduleText(formatScheduleTextInput(nextText));
+    },
+    [scheduleText]
+  );
+
+  const handleScheduleTextChange = useCallback((event: ChangeEvent<HTMLTextAreaElement>) => {
+    setScheduleText(event.target.value);
+  }, []);
+
+  const syncScheduleText = useCallback(async () => {
     const currentScheduleParseResult = parseScheduleText(scheduleText);
     if (!scheduleText.trim() || currentScheduleParseResult.errors.length > 0) return;
 
@@ -381,7 +448,30 @@ export function ReportsPage({ view = 'shifts' }: { view?: ReportsView }) {
     saveScheduleTextValue(scheduleText);
     forceRefresh();
     showToast('Графік синхронізовано', 'success');
-  }
+  }, [confirmAction, forceRefresh, scheduleText, settings.rate, showToast]);
+
+  const handleSyncScheduleTextClick = useCallback(() => {
+    void syncScheduleText();
+  }, [syncScheduleText]);
+
+  const handleCreateShift = useCallback(() => {
+    setCreatingShift(true);
+    setEditingShiftId(null);
+  }, []);
+
+  const handleCancelCreateShift = useCallback(() => setCreatingShift(false), []);
+
+  const handleCreateShiftSaved = useCallback((shift: Shift | ActiveShift) => {
+    setCreatingShift(false);
+    setSelectedDateKey(getDateKey(shift.startedAt));
+    setVisibleMonth(
+      new Date(new Date(shift.startedAt).getFullYear(), new Date(shift.startedAt).getMonth(), 1)
+    );
+  }, []);
+
+  const handleEditModalBackdropClick = useCallback((event: MouseEvent<HTMLDivElement>) => {
+    if (event.target === event.currentTarget) handleCancelEdit();
+  }, [handleCancelEdit]);
 
   return (
     <>
@@ -400,11 +490,7 @@ export function ReportsPage({ view = 'shifts' }: { view?: ReportsView }) {
           subtitle={calendarSummary}
           status={calendarStatus}
           ariaLabel="Календар звітів"
-          onMonthChange={(month) => {
-            setVisibleMonth(month);
-            setSelectedDateKey(null);
-            setCreatingShift(false);
-          }}
+          onMonthChange={handleMonthChange}
           onDateClick={chooseDate}
         />
 
@@ -414,15 +500,9 @@ export function ReportsPage({ view = 'shifts' }: { view?: ReportsView }) {
               <section className="panel create-shift-panel">
                 <EditShiftForm
                   mode="create"
-                  shift={getDefaultNewShift(selectedDateKey, settings.rate)}
-                  onCancel={() => setCreatingShift(false)}
-                  onSaved={(shift) => {
-                    setCreatingShift(false);
-                    setSelectedDateKey(getDateKey(shift.startedAt));
-                    setVisibleMonth(
-                      new Date(new Date(shift.startedAt).getFullYear(), new Date(shift.startedAt).getMonth(), 1)
-                    );
-                  }}
+                  shift={newShift}
+                  onCancel={handleCancelCreateShift}
+                  onSaved={handleCreateShiftSaved}
                 />
               </section>
             )}
@@ -434,10 +514,7 @@ export function ReportsPage({ view = 'shifts' }: { view?: ReportsView }) {
                     className="clear save-action"
                     type="button"
                     disabled={creatingShift}
-                    onClick={() => {
-                      setCreatingShift(true);
-                      setEditingShiftId(null);
-                    }}
+                    onClick={handleCreateShift}
                   >
                     Додати
                   </button>
@@ -445,7 +522,7 @@ export function ReportsPage({ view = 'shifts' }: { view?: ReportsView }) {
                     className="clear"
                     type="button"
                     disabled={shifts.length === 0}
-                    onClick={() => void clearHistory()}
+                    onClick={handleClearHistoryClick}
                   >
                     Очистити
                   </button>
@@ -469,15 +546,18 @@ export function ReportsPage({ view = 'shifts' }: { view?: ReportsView }) {
 
         {view === 'analytics' && (
           <>
-            <section className="panel schedule-panel">
+            <section
+              className={`panel schedule-panel ${isScheduleParsePending ? 'is-updating' : ''}`}
+              aria-busy={isScheduleParsePending}
+            >
               <div className="section-header">
                 <h2>Графік роботи</h2>
                 <div className="section-actions">
                   <button
                     className="clear save-action"
                     type="button"
-                    disabled={!scheduleText.trim() || scheduleParseResult.errors.length > 0}
-                    onClick={() => void syncScheduleText()}
+                    disabled={!scheduleText.trim() || isScheduleParsePending || scheduleParseResult.errors.length > 0}
+                    onClick={handleSyncScheduleTextClick}
                   >
                     Синхронізувати
                   </button>
@@ -489,21 +569,26 @@ export function ReportsPage({ view = 'shifts' }: { view?: ReportsView }) {
               <textarea
                 className="schedule-textarea"
                 value={scheduleText}
-                onChange={(event) => setScheduleText(event.target.value)}
+                onChange={handleScheduleTextChange}
                 onPaste={pasteScheduleText}
                 placeholder="--01.06.2026--&#10;In time: 05:57&#10;Out time: 16:52&#10;Total: 10:55"
                 spellCheck={false}
               />
-              <div className="schedule-summary">
+              <div className="schedule-summary" aria-live="polite">
                 <span>Днів: {scheduleParseResult.entries.length}</span>
                 <span>З планом: {scheduleEntriesWithPlan}</span>
                 <span>Помилок: {scheduleParseResult.errors.length}</span>
+                {isScheduleParsePending && <span className="schedule-pending">Оновлення...</span>}
               </div>
               <p className="form-error" hidden={scheduleParseResult.errors.length === 0}>
                 {scheduleParseResult.errors.slice(0, 2).join(' · ')}
               </p>
             </section>
-            <section className="panel dashboard-summary analytics-summary" aria-label="Підсумки звіту">
+            <section
+              className={`panel dashboard-summary analytics-summary ${isScheduleParsePending ? 'is-updating' : ''}`}
+              aria-label="Підсумки звіту"
+              aria-busy={isScheduleParsePending}
+            >
               <div className="summary-metric">
                 <span>Сума</span>
                 <strong>{formatMoney(analyticsTotalPay)}</strong>
@@ -545,7 +630,11 @@ export function ReportsPage({ view = 'shifts' }: { view?: ReportsView }) {
                   ))}
                 </div>
               </div>
-              <div className="analytics-chart" aria-label="Графік по днях">
+              <div
+                className={`analytics-chart ${isScheduleParsePending ? 'is-updating' : ''}`}
+                aria-label="Графік по днях"
+                aria-busy={isScheduleParsePending}
+              >
                 {chartDates.map((date) => {
                   const dateKey = getDateKey(date);
                   const stats = dayStats.get(dateKey);
@@ -582,13 +671,7 @@ export function ReportsPage({ view = 'shifts' }: { view?: ReportsView }) {
               <div className="dashboard-list-section">
                 <h2>Найбільші розбіжності</h2>
                 <ScheduleDiffList
-                  rows={scheduleDiffRows.slice(0, 3).map((item) => ({
-                    dateKey: item.dateKey,
-                    timestamp: item.stats.timestamp,
-                    endedAt: item.stats.endedAt,
-                    entry: item.entry,
-                    diff: item.diff
-                  }))}
+                  rows={topScheduleDiffRows}
                 />
               </div>
             </section>
@@ -598,7 +681,7 @@ export function ReportsPage({ view = 'shifts' }: { view?: ReportsView }) {
       {editingShift && (
         <div
           className="modal-backdrop edit-modal-backdrop"
-          onClick={(event) => event.target === event.currentTarget && handleCancelEdit()}
+          onClick={handleEditModalBackdropClick}
         >
           <div className="edit-modal" role="dialog" aria-modal="true" aria-labelledby="edit-shift-modal-title">
             <div className="edit-modal-header">

@@ -16,6 +16,9 @@ export const chartModes: Array<{ value: ChartMode; label: string }> = [
 ];
 
 const percentFormatter = new Intl.NumberFormat('uk-UA', { maximumFractionDigits: 1 });
+const hourMs = 3600000;
+const minuteMs = 60000;
+const maxScheduleDiffRows = 3;
 
 export interface DayStats {
   pay: number;
@@ -45,11 +48,23 @@ interface ScheduleDiff {
   outDiffMs: number | null;
 }
 
+interface ScheduleDiffRow {
+  dateKey: string;
+  stats: DayStats;
+  entry: ScheduleEntry | undefined;
+  diff: ScheduleDiff;
+}
+
 export function getMonthShifts<T extends Shift>(shifts: T[], monthDate: Date): T[] {
   const start = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1).getTime();
   const end = new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 1).getTime();
+  const monthShifts: T[] = [];
 
-  return shifts.filter((shift) => shift.startedAt >= start && shift.startedAt < end);
+  for (const shift of shifts) {
+    if (shift.startedAt >= start && shift.startedAt < end) monthShifts.push(shift);
+  }
+
+  return monthShifts;
 }
 
 export function getWeekRange(date = new Date()): { startKey: string; endKey: string } {
@@ -65,8 +80,13 @@ export function getWeekRange(date = new Date()): { startKey: string; endKey: str
 }
 
 export function buildSalarySummary(shifts: Shift[]) {
-  const totalPay = shifts.reduce((sum, shift) => sum + calculatePay(shift), 0);
-  const totalMs = shifts.reduce((sum, shift) => sum + Math.max(0, shift.endedAt - shift.startedAt), 0);
+  let totalPay = 0;
+  let totalMs = 0;
+
+  for (const shift of shifts) {
+    totalPay += calculatePay(shift);
+    totalMs += Math.max(0, shift.endedAt - shift.startedAt);
+  }
 
   return { totalPay, totalMs };
 }
@@ -78,7 +98,7 @@ function getChartDates(range: NormalizedRange | null, visibleMonth: Date): Date[
     const start = getTimestampFromDateKey(range.startKey);
     const end = getTimestampFromDateKey(range.endKey);
     if (start !== null && end !== null) {
-      for (const date = new Date(start); date <= new Date(end); date.setDate(date.getDate() + 1)) {
+      for (const date = new Date(start); date.getTime() <= end; date.setDate(date.getDate() + 1)) {
         chartDates.push(new Date(date));
       }
     }
@@ -91,6 +111,26 @@ function getChartDates(range: NormalizedRange | null, visibleMonth: Date): Date[
   }
 
   return chartDates;
+}
+
+function getDateKeyFromDate(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function insertScheduleDiffRow(rows: ScheduleDiffRow[], row: ScheduleDiffRow): void {
+  const diffMs = Math.abs(row.diff.totalDiffMs || 0);
+  let index = 0;
+
+  while (index < rows.length && Math.abs(rows[index].diff.totalDiffMs || 0) >= diffMs) {
+    index += 1;
+  }
+
+  if (index >= maxScheduleDiffRows) return;
+  rows.splice(index, 0, row);
+  if (rows.length > maxScheduleDiffRows) rows.length = maxScheduleDiffRows;
 }
 
 export function buildReportAnalytics({
@@ -106,10 +146,8 @@ export function buildReportAnalytics({
   scheduleEntries: ScheduleEntry[];
   chartMode: ChartMode;
 }) {
-  const totals = buildSalarySummary(reportShifts);
-  const averagePay = reportShifts.length > 0 ? totals.totalPay / reportShifts.length : 0;
-  const averageShiftMs = reportShifts.length > 0 ? totals.totalMs / reportShifts.length : 0;
-  const averagePayPerHour = totals.totalMs > 0 ? totals.totalPay / (totals.totalMs / 3600000) : 0;
+  let totalPay = 0;
+  let totalMs = 0;
   const shiftTypes = new Map<string, number>();
   const multipliers = new Map<string, number>([
     ['x1', 0],
@@ -118,66 +156,93 @@ export function buildReportAnalytics({
   ]);
   const dayStats = new Map<string, DayStats>();
   const weekStats = new Map<string, WeekStats>();
-  const scheduleByDateKey = new Map(scheduleEntries.map((entry) => [entry.dateKey, entry]));
+  const scheduleByDateKey = new Map<string, ScheduleEntry>();
+  let scheduleEntriesWithPlan = 0;
+  let bestWeek: WeekStats | undefined;
 
-  reportShifts.forEach((shift) => {
+  for (const entry of scheduleEntries) {
+    scheduleByDateKey.set(entry.dateKey, entry);
+    if (entry.plannedTotalMs !== null) scheduleEntriesWithPlan += 1;
+  }
+
+  for (const shift of reportShifts) {
     const shiftType = shift.shiftType;
     const multiplier = normalizeRateMultiplier(shift.rateMultiplier ?? (shift.doubleRate ? 2 : 1));
-    const dayKey = getDateKey(shift.startedAt);
     const pay = calculatePay(shift);
     const ms = Math.max(0, shift.endedAt - shift.startedAt);
-    const currentDay = dayStats.get(dayKey) || {
-      pay: 0,
-      ms: 0,
-      count: 0,
-      timestamp: shift.startedAt,
-      endedAt: shift.endedAt
-    };
-    const weekStart = new Date(shift.startedAt);
-    const weekOffset = (weekStart.getDay() + 6) % 7;
-    weekStart.setDate(weekStart.getDate() - weekOffset);
-    weekStart.setHours(0, 0, 0, 0);
-    const weekKey = getDateKey(weekStart);
-    const currentWeek = weekStats.get(weekKey) || {
-      pay: 0,
-      ms: 0,
-      count: 0,
-      timestamp: weekStart.getTime()
-    };
+    const shiftDate = new Date(shift.startedAt);
+    const dayKey = getDateKeyFromDate(shiftDate);
+    const weekOffset = (shiftDate.getDay() + 6) % 7;
+    const weekStart = new Date(shiftDate.getFullYear(), shiftDate.getMonth(), shiftDate.getDate() - weekOffset);
+    const weekKey = getDateKeyFromDate(weekStart);
+    const multiplierKey = `x${multiplier}`;
+
+    totalPay += pay;
+    totalMs += ms;
 
     shiftTypes.set(shiftType, (shiftTypes.get(shiftType) || 0) + 1);
-    multipliers.set(`x${multiplier}`, (multipliers.get(`x${multiplier}`) || 0) + 1);
-    dayStats.set(dayKey, {
-      pay: currentDay.pay + pay,
-      ms: currentDay.ms + ms,
-      count: currentDay.count + 1,
-      timestamp: Math.min(currentDay.timestamp, shift.startedAt),
-      endedAt: Math.max(currentDay.endedAt, shift.endedAt)
-    });
-    weekStats.set(weekKey, {
-      pay: currentWeek.pay + pay,
-      ms: currentWeek.ms + ms,
-      count: currentWeek.count + 1,
-      timestamp: currentWeek.timestamp
-    });
-  });
+    multipliers.set(multiplierKey, (multipliers.get(multiplierKey) || 0) + 1);
 
+    const currentDay = dayStats.get(dayKey);
+    if (currentDay) {
+      currentDay.pay += pay;
+      currentDay.ms += ms;
+      currentDay.count += 1;
+      currentDay.timestamp = Math.min(currentDay.timestamp, shift.startedAt);
+      currentDay.endedAt = Math.max(currentDay.endedAt, shift.endedAt);
+    } else {
+      dayStats.set(dayKey, {
+        pay,
+        ms,
+        count: 1,
+        timestamp: shift.startedAt,
+        endedAt: shift.endedAt
+      });
+    }
+
+    let currentWeek = weekStats.get(weekKey);
+    if (currentWeek) {
+      currentWeek.pay += pay;
+      currentWeek.ms += ms;
+      currentWeek.count += 1;
+    } else {
+      currentWeek = {
+        pay,
+        ms,
+        count: 1,
+        timestamp: weekStart.getTime()
+      };
+      weekStats.set(weekKey, currentWeek);
+    }
+
+    if (!bestWeek || currentWeek.pay > bestWeek.pay) bestWeek = currentWeek;
+  }
+
+  const totals = { totalPay, totalMs };
+  const averagePay = reportShifts.length > 0 ? totalPay / reportShifts.length : 0;
+  const averageShiftMs = reportShifts.length > 0 ? totalMs / reportShifts.length : 0;
+  const averagePayPerHour = totalMs > 0 ? totalPay / (totalMs / hourMs) : 0;
   const chartDates = getChartDates(range, visibleMonth);
-  const scheduleEntriesInChart = chartDates
-    .map((date) => scheduleByDateKey.get(getDateKey(date)))
-    .filter((entry): entry is ScheduleEntry => Boolean(entry));
-  const plannedScheduleMs = scheduleEntriesInChart.reduce((sum, entry) => sum + (entry.plannedTotalMs || 0), 0);
-  const totalScheduleDiffMs = totals.totalMs - plannedScheduleMs;
-  const scheduleEntriesWithPlan = scheduleEntries.filter((entry) => entry.plannedTotalMs !== null).length;
-  const scheduleDiffRows = Array.from(dayStats.entries())
-    .map(([dateKey, stats]) => {
-      const entry = scheduleByDateKey.get(dateKey);
-      const diff = getScheduleDiff(entry, { startedAt: stats.timestamp, endedAt: stats.endedAt });
-      return { dateKey, stats, entry, diff };
-    })
-    .filter((item) => item.entry?.plannedTotalMs !== null && item.diff.totalDiffMs !== null)
-    .sort((first, second) => Math.abs(second.diff.totalDiffMs || 0) - Math.abs(first.diff.totalDiffMs || 0));
-  const bestWeek = Array.from(weekStats.values()).sort((first, second) => second.pay - first.pay)[0];
+  const plannedChartValues = new Map<string, number>();
+  let plannedScheduleMs = 0;
+
+  for (const date of chartDates) {
+    const dateKey = getDateKeyFromDate(date);
+    const plannedTotalMs = scheduleByDateKey.get(dateKey)?.plannedTotalMs || 0;
+    plannedScheduleMs += plannedTotalMs;
+    plannedChartValues.set(dateKey, plannedTotalMs / hourMs);
+  }
+
+  const totalScheduleDiffMs = totalMs - plannedScheduleMs;
+  const scheduleDiffRows: ScheduleDiffRow[] = [];
+
+  for (const [dateKey, stats] of dayStats) {
+    const entry = scheduleByDateKey.get(dateKey);
+    const diff = getScheduleDiff(entry, { startedAt: stats.timestamp, endedAt: stats.endedAt });
+    if (entry?.plannedTotalMs === null || diff.totalDiffMs === null) continue;
+    insertScheduleDiffRow(scheduleDiffRows, { dateKey, stats, entry, diff });
+  }
+
   const shiftTypePercentages = ['1 зміна', '2 зміна', 'Поза графіком'].map((label) => {
     const count = shiftTypes.get(label) || 0;
     const percent = reportShifts.length > 0 ? (count / reportShifts.length) * 100 : 0;
@@ -186,15 +251,15 @@ export function buildReportAnalytics({
 
   const getChartValue = (stats: { pay: number; ms: number } | undefined) => {
     if (!stats) return 0;
-    if (chartMode === 'hours') return stats.ms / 3600000;
+    if (chartMode === 'hours') return stats.ms / hourMs;
     return stats.pay;
   };
   const getPlannedChartValue = (dateKey: string) => {
     if (chartMode !== 'hours') return 0;
-    return (scheduleByDateKey.get(dateKey)?.plannedTotalMs || 0) / 3600000;
+    return plannedChartValues.get(dateKey) || 0;
   };
   const getChartTitle = (date: Date, stats: DayStats | undefined) => {
-    const dateKey = getDateKey(date);
+    const dateKey = getDateKeyFromDate(date);
     const entry = scheduleByDateKey.get(dateKey);
     const diff = stats ? getScheduleDiff(entry, { startedAt: stats.timestamp, endedAt: stats.endedAt }) : null;
 
@@ -218,11 +283,15 @@ export function buildReportAnalytics({
     }
     return `${formatDateOnly(date.getTime())}: ${formatMoney(stats.pay)}`;
   };
-  const maxChartValue = Math.max(
-    1,
-    ...Array.from(dayStats.values()).map((item) => getChartValue(item)),
-    ...chartDates.map((date) => getPlannedChartValue(getDateKey(date)))
-  );
+  let maxChartValue = 1;
+  for (const stats of dayStats.values()) {
+    maxChartValue = Math.max(maxChartValue, getChartValue(stats));
+  }
+  if (chartMode === 'hours') {
+    for (const plannedValue of plannedChartValues.values()) {
+      maxChartValue = Math.max(maxChartValue, plannedValue);
+    }
+  }
 
   return {
     ...totals,
@@ -263,18 +332,18 @@ function getScheduleDiff(
     inDiffMs:
       entry.plannedInMinutes === null
         ? null
-        : (getMinutesFromTimeOfDay(shift.startedAt) - entry.plannedInMinutes) * 60000,
+        : (getMinutesFromTimeOfDay(shift.startedAt) - entry.plannedInMinutes) * minuteMs,
     outDiffMs:
       entry.plannedOutMinutes === null
         ? null
-        : (getMinutesFromTimeOfDay(shift.endedAt) - entry.plannedOutMinutes) * 60000
+        : (getMinutesFromTimeOfDay(shift.endedAt) - entry.plannedOutMinutes) * minuteMs
   };
 }
 
 function formatSignedHoursMinutes(milliseconds: number | null): string {
   if (milliseconds === null) return '-';
   const sign = milliseconds > 0 ? '+' : milliseconds < 0 ? '-' : '';
-  const totalMinutes = Math.floor(Math.abs(milliseconds) / 60000);
+  const totalMinutes = Math.floor(Math.abs(milliseconds) / minuteMs);
   const hours = String(Math.floor(totalMinutes / 60)).padStart(2, '0');
   const minutes = String(totalMinutes % 60).padStart(2, '0');
   return `${sign}${hours}:${minutes}`;

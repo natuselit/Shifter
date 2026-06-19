@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from 'react';
-import { ReportsPage } from '@/pages/reports';
-import { SettingsPage } from '@/pages/settings';
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { TimerPage } from '@/pages/timer';
 import { BottomNav } from '@/widgets/bottom-nav';
+
+const ReportsPage = lazy(() => import('@/pages/reports').then((module) => ({ default: module.ReportsPage })));
+const SettingsPage = lazy(() => import('@/pages/settings').then((module) => ({ default: module.SettingsPage })));
 
 const legacyRedirects: Record<string, string> = {
   '/history': '#/reports',
@@ -58,7 +59,7 @@ export function AppRouter() {
 
   return (
     <>
-      {page}
+      <Suspense fallback={null}>{page}</Suspense>
       <BottomNav currentPath={path} />
     </>
   );

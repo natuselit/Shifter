@@ -1,5 +1,5 @@
 import type { PayBreakdown, RateMultiplier, Shift, ShiftType } from './types';
-import { getDateKey, getTimestampFromDateKey } from '@/shared/lib/date';
+import { getTimestampFromDateKey } from '@/shared/lib/date';
 import { formatTimeOnly } from '@/shared/lib/format';
 
 export { getDateKey, getTimestampFromDateKey } from '@/shared/lib/date';
@@ -159,7 +159,15 @@ export function calculateLivePay(startedAt: number | null, rate: number, rateMul
 }
 
 export function hasShiftOnDate(shifts: Shift[], dateKey: string, ignoredShiftId: string | null = null): boolean {
-  return shifts.some((shift) => shift.id !== ignoredShiftId && getDateKey(shift.startedAt) === dateKey);
+  const start = getTimestampFromDateKey(dateKey);
+  const end = getTimestampFromDateKey(dateKey, true);
+  if (start === null || end === null) return false;
+
+  for (const shift of shifts) {
+    if (shift.id !== ignoredShiftId && shift.startedAt >= start && shift.startedAt <= end) return true;
+  }
+
+  return false;
 }
 
 export function getShiftCopyText(shift: Shift, surname: string): string {

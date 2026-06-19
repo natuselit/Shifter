@@ -13,7 +13,6 @@ export function registerAppServiceWorker() {
   });
 
   const updateServiceWorker = registerSW({
-    immediate: true,
     onNeedRefresh() {
       void updateServiceWorker(true);
     }

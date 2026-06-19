@@ -1,6 +1,6 @@
 import { CalendarGrid, type CalendarGridProps } from '@/shared/ui';
 import { formatMonth } from '@/shared/lib';
-import type { ReactNode } from 'react';
+import { memo, useCallback, type ReactNode } from 'react';
 
 interface CalendarPanelProps extends CalendarGridProps {
   title?: string;
@@ -10,7 +10,7 @@ interface CalendarPanelProps extends CalendarGridProps {
   onMonthChange: (month: Date) => void;
 }
 
-export function CalendarPanel({
+function CalendarPanelView({
   visibleMonth,
   selectedDateKey,
   rangeState,
@@ -24,6 +24,14 @@ export function CalendarPanel({
   onDateClick,
   onMonthChange
 }: CalendarPanelProps) {
+  const showPreviousMonth = useCallback(() => {
+    onMonthChange(new Date(visibleMonth.getFullYear(), visibleMonth.getMonth() - 1, 1));
+  }, [onMonthChange, visibleMonth]);
+
+  const showNextMonth = useCallback(() => {
+    onMonthChange(new Date(visibleMonth.getFullYear(), visibleMonth.getMonth() + 1, 1));
+  }, [onMonthChange, visibleMonth]);
+
   return (
     <section className="panel calendar-panel">
       <div className="calendar-header">
@@ -31,7 +39,7 @@ export function CalendarPanel({
           className="calendar-nav"
           type="button"
           aria-label="Попередній місяць"
-          onClick={() => onMonthChange(new Date(visibleMonth.getFullYear(), visibleMonth.getMonth() - 1, 1))}
+          onClick={showPreviousMonth}
         >
           ‹
         </button>
@@ -44,7 +52,7 @@ export function CalendarPanel({
           className="calendar-nav"
           type="button"
           aria-label="Наступний місяць"
-          onClick={() => onMonthChange(new Date(visibleMonth.getFullYear(), visibleMonth.getMonth() + 1, 1))}
+          onClick={showNextMonth}
         >
           ›
         </button>
@@ -62,3 +70,5 @@ export function CalendarPanel({
     </section>
   );
 }
+
+export const CalendarPanel = memo(CalendarPanelView);

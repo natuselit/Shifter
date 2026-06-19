@@ -3,11 +3,24 @@ import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 import packageJson from './package.json';
 
+const buildEnv =
+  (globalThis as typeof globalThis & { process?: { env?: Record<string, string | undefined> } }).process?.env ?? {};
+
+const sourceDateEpoch = Number(buildEnv.SOURCE_DATE_EPOCH);
+const appUpdatedAt =
+  buildEnv.APP_UPDATED_AT ??
+  (Number.isFinite(sourceDateEpoch) && sourceDateEpoch > 0
+    ? new Date(sourceDateEpoch * 1000).toISOString()
+    : packageJson.version);
+
 export default defineConfig({
   base: '/Shifter/',
   define: {
     __APP_VERSION__: JSON.stringify(packageJson.version),
-    __APP_UPDATED_AT__: JSON.stringify(new Date().toISOString())
+    __APP_UPDATED_AT__: JSON.stringify(appUpdatedAt)
+  },
+  build: {
+    chunkSizeWarningLimit: 180
   },
   resolve: {
     alias: {
@@ -41,7 +54,7 @@ export default defineConfig({
       workbox: {
         cleanupOutdatedCaches: true,
         clientsClaim: true,
-        globPatterns: ['**/*.{js,css,html,svg,png,ico,json,webmanifest}'],
+        globPatterns: ['**/*.{js,css,html,png,ico,json}'],
         navigateFallback: 'index.html',
         skipWaiting: true
       }

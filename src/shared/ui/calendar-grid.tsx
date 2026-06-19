@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { getDateKey } from '@/shared/lib/date';
 import { formatDateOnly, formatMonth } from '@/shared/lib/format';
 import { getRangeKeys, type RangeState } from '@/shared/lib/range';
@@ -12,6 +13,8 @@ export interface CalendarGridProps {
   ariaLabel: string;
   onDateClick: (date: Date, dateKey: string) => void;
 }
+
+const emptyShiftDateKeys = new Set<string>();
 
 function getRangeClasses(dateKey: string, state?: RangeState) {
   if (!state) return '';
@@ -34,7 +37,7 @@ export function CalendarGrid({
   visibleMonth,
   selectedDateKey,
   rangeState,
-  shiftDateKeys = new Set<string>(),
+  shiftDateKeys = emptyShiftDateKeys,
   activeDateKey,
   titleId,
   ariaLabel,
@@ -42,15 +45,18 @@ export function CalendarGrid({
 }: CalendarGridProps) {
   const year = visibleMonth.getFullYear();
   const monthIndex = visibleMonth.getMonth();
-  const firstDay = new Date(year, monthIndex, 1);
-  const startOffset = (firstDay.getDay() + 6) % 7;
-  const gridStart = new Date(year, monthIndex, 1 - startOffset);
   const todayKey = getDateKey(new Date());
-  const days = Array.from({ length: 42 }, (_, index) => {
-    const date = new Date(gridStart);
-    date.setDate(gridStart.getDate() + index);
-    return date;
-  });
+  const days = useMemo(() => {
+    const firstDay = new Date(year, monthIndex, 1);
+    const startOffset = (firstDay.getDay() + 6) % 7;
+    const gridStart = new Date(year, monthIndex, 1 - startOffset);
+
+    return Array.from({ length: 42 }, (_, index) => {
+      const date = new Date(gridStart);
+      date.setDate(gridStart.getDate() + index);
+      return date;
+    });
+  }, [monthIndex, year]);
 
   return (
     <>

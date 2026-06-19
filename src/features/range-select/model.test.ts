@@ -3,6 +3,12 @@ import { getDateKey, type Shift } from '@/entities/shift';
 import { filterShiftsByRange } from './model';
 
 describe('range select model', () => {
+  it('returns the same list when range is incomplete', () => {
+    const shifts: Shift[] = [];
+
+    expect(filterShiftsByRange(shifts, { rangeStartKey: '2026-06-15', rangeEndKey: null })).toBe(shifts);
+  });
+
   it('filters shifts by date range', () => {
     const shifts: Shift[] = [15, 18, 25].map((day) => ({
       id: String(day),

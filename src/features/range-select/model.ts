@@ -18,5 +18,10 @@ export function filterShiftsByRange<T extends Shift>(shifts: T[], state: RangeSt
   const end = getTimestampFromDateKey(range.endKey, true);
   if (start === null || end === null) return [];
 
-  return shifts.filter((shift) => shift.startedAt >= start && shift.startedAt <= end);
+  const filtered: T[] = [];
+  for (const shift of shifts) {
+    if (shift.startedAt >= start && shift.startedAt <= end) filtered.push(shift);
+  }
+
+  return filtered;
 }
