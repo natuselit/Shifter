@@ -4,6 +4,8 @@ import type { ReactNode } from 'react';
 
 interface CalendarPanelProps extends CalendarGridProps {
   title?: string;
+  subtitle?: string;
+  status?: string;
   children?: ReactNode;
   onMonthChange: (month: Date) => void;
 }
@@ -13,7 +15,10 @@ export function CalendarPanel({
   selectedDateKey,
   rangeState,
   shiftDateKeys,
+  activeDateKey,
   title,
+  subtitle,
+  status,
   ariaLabel,
   children,
   onDateClick,
@@ -30,7 +35,11 @@ export function CalendarPanel({
         >
           ‹
         </button>
-        <h2>{title || formatMonth(visibleMonth)}</h2>
+        <div className="calendar-title-block">
+          <h2>{title || formatMonth(visibleMonth)}</h2>
+          {subtitle && <p>{subtitle}</p>}
+          {status && <span>{status}</span>}
+        </div>
         <button
           className="calendar-nav"
           type="button"
@@ -45,6 +54,7 @@ export function CalendarPanel({
         selectedDateKey={selectedDateKey}
         rangeState={rangeState}
         shiftDateKeys={shiftDateKeys}
+        activeDateKey={activeDateKey}
         ariaLabel={ariaLabel}
         onDateClick={onDateClick}
       />

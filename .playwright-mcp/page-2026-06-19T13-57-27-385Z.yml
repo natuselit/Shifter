@@ -1,0 +1,190 @@
+- generic [ref=e2]:
+  - generic [ref=e3]:
+    - link "Skip to content" [ref=e4] [cursor=pointer]:
+      - /url: "#start-of-content"
+    - banner [ref=e6]:
+      - heading "Navigation Menu" [level=2] [ref=e7]
+      - generic [ref=e8]:
+        - link "Homepage" [ref=e10] [cursor=pointer]:
+          - /url: /
+          - img [ref=e11]
+        - generic [ref=e13]:
+          - navigation "Global" [ref=e16]:
+            - list [ref=e17]:
+              - listitem [ref=e18]:
+                - button "Platform" [ref=e20] [cursor=pointer]:
+                  - text: Platform
+                  - img [ref=e21]
+              - listitem [ref=e23]:
+                - button "Solutions" [ref=e25] [cursor=pointer]:
+                  - text: Solutions
+                  - img [ref=e26]
+              - listitem [ref=e28]:
+                - button "Resources" [ref=e30] [cursor=pointer]:
+                  - text: Resources
+                  - img [ref=e31]
+              - listitem [ref=e33]:
+                - button "Open Source" [ref=e35] [cursor=pointer]:
+                  - text: Open Source
+                  - img [ref=e36]
+              - listitem [ref=e38]:
+                - button "Enterprise" [ref=e40] [cursor=pointer]:
+                  - text: Enterprise
+                  - img [ref=e41]
+              - listitem [ref=e43]:
+                - link "Pricing" [ref=e44] [cursor=pointer]:
+                  - /url: https://github.com/pricing
+                  - generic [ref=e45]: Pricing
+          - generic [ref=e46]:
+            - button "Search or jump to…" [ref=e49] [cursor=pointer]:
+              - img [ref=e51]
+              - generic [ref=e53]: Search or jump to...
+              - img [ref=e55]
+            - link "Sign in" [ref=e59] [cursor=pointer]:
+              - /url: /login?return_to=https%3A%2F%2Fgithub.com%2Fnatuselit%2FShifter%2Fpulls%3Fq%3Dis%253Apr
+            - link "Sign up" [ref=e60] [cursor=pointer]:
+              - /url: /signup?ref_cta=Sign+up&ref_loc=header+logged+out&ref_page=%2F%3Cuser-name%3E%2F%3Crepo-name%3E%2Fpull_requests%2Findex&source=header-repo&source_repo=natuselit%2FShifter
+            - button "Appearance settings" [ref=e63] [cursor=pointer]:
+              - img
+  - main [ref=e67]:
+    - generic [ref=e68]:
+      - generic [ref=e69]:
+        - generic [ref=e71]:
+          - img [ref=e72]
+          - link "natuselit" [ref=e75] [cursor=pointer]:
+            - /url: /natuselit
+          - generic [ref=e76]: /
+          - strong [ref=e77]:
+            - link "Shifter" [ref=e78] [cursor=pointer]:
+              - /url: /natuselit/Shifter
+          - generic [ref=e79]: Public
+        - generic [ref=e80]:
+          - list:
+            - listitem [ref=e81]:
+              - link "You must be signed in to change notification settings" [ref=e82] [cursor=pointer]:
+                - /url: /login?return_to=%2Fnatuselit%2FShifter
+                - img [ref=e83]
+                - text: Notifications
+            - listitem [ref=e85]:
+              - link "Fork 0" [ref=e86] [cursor=pointer]:
+                - /url: /login?return_to=%2Fnatuselit%2FShifter
+                - img [ref=e87]
+                - text: Fork
+                - generic "0" [ref=e89]
+            - listitem [ref=e90]:
+              - link "You must be signed in to star a repository" [ref=e92] [cursor=pointer]:
+                - /url: /login?return_to=%2Fnatuselit%2FShifter
+                - img [ref=e93]
+                - text: Star
+                - generic "0 users starred this repository" [ref=e95]: "0"
+      - navigation "Repository" [ref=e96]:
+        - list [ref=e97]:
+          - listitem [ref=e98]:
+            - link "Code" [ref=e99] [cursor=pointer]:
+              - /url: /natuselit/Shifter
+              - img [ref=e100]
+              - generic [ref=e102]: Code
+          - listitem [ref=e103]:
+            - link "Issues" [ref=e104] [cursor=pointer]:
+              - /url: /natuselit/Shifter/issues
+              - img [ref=e105]
+              - generic [ref=e108]: Issues
+          - listitem [ref=e109]:
+            - link "Pull requests" [ref=e110] [cursor=pointer]:
+              - /url: /natuselit/Shifter/pulls
+              - img [ref=e111]
+              - generic [ref=e113]: Pull requests
+          - listitem [ref=e114]:
+            - link "Actions" [ref=e115] [cursor=pointer]:
+              - /url: /natuselit/Shifter/actions
+              - img [ref=e116]
+              - generic [ref=e118]: Actions
+          - listitem [ref=e119]:
+            - link "Projects" [ref=e120] [cursor=pointer]:
+              - /url: /natuselit/Shifter/projects
+              - img [ref=e121]
+              - generic [ref=e123]: Projects
+          - listitem [ref=e124]:
+            - link "Security and quality" [ref=e125] [cursor=pointer]:
+              - /url: /natuselit/Shifter/security
+              - img [ref=e126]
+              - generic [ref=e128]: Security and quality
+          - listitem [ref=e129]:
+            - link "Insights" [ref=e130] [cursor=pointer]:
+              - /url: /natuselit/Shifter/pulse
+              - img [ref=e131]
+              - generic [ref=e133]: Insights
+    - generic [ref=e136]:
+      - 'heading "Pull requests: natuselit/Shifter" [level=1] [ref=e137]'
+      - generic [ref=e138]:
+        - search [ref=e139]:
+          - search "Issues" [ref=e140]:
+            - textbox "Search all issues" [ref=e141]: is:pr
+            - img
+          - navigation "Issue" [ref=e143]:
+            - link "Labels 9" [ref=e144] [cursor=pointer]:
+              - /url: /natuselit/Shifter/labels
+              - img [ref=e145]
+              - text: Labels 9
+            - link "Milestones 0" [ref=e147] [cursor=pointer]:
+              - /url: /natuselit/Shifter/milestones
+              - img [ref=e148]
+              - text: Milestones 0
+        - link "New pull request" [ref=e152] [cursor=pointer]:
+          - /url: /natuselit/Shifter/compare
+          - generic [ref=e155]: New pull request
+      - link "Clear current search query, filters, and sorts" [ref=e157] [cursor=pointer]:
+        - /url: /natuselit/Shifter/pulls?q=is%3Apr+is%3Aopen
+        - img [ref=e158]
+        - text: Clear current search query, filters, and sorts
+      - generic [ref=e162]:
+        - img [ref=e163]
+        - heading "Welcome to pull requests!" [level=2] [ref=e166]
+        - paragraph [ref=e167]:
+          - text: Pull requests help you collaborate on code with other people. As pull requests are created, they’ll appear here in a searchable and filterable list. To get started, you should
+          - link "create a pull request" [ref=e168] [cursor=pointer]:
+            - /url: /natuselit/Shifter/compare
+          - text: .
+      - generic [ref=e169]:
+        - img [ref=e170]
+        - strong [ref=e172]: ProTip!
+        - text: "Updated in the last three days:"
+        - link "updated:>2026-06-16" [ref=e173] [cursor=pointer]:
+          - /url: /natuselit/Shifter/issues?q=is%3Apr+updated%3A%3E2026-06-16
+        - text: .
+  - contentinfo [ref=e174]:
+    - heading "Footer" [level=2] [ref=e175]
+    - generic [ref=e176]:
+      - generic [ref=e177]:
+        - link "GitHub Homepage" [ref=e178] [cursor=pointer]:
+          - /url: https://github.com
+          - img [ref=e179]
+        - generic [ref=e181]: © 2026 GitHub, Inc.
+      - navigation "Footer" [ref=e182]:
+        - heading "Footer navigation" [level=3] [ref=e183]
+        - list "Footer navigation" [ref=e184]:
+          - listitem [ref=e185]:
+            - link "Terms" [ref=e186] [cursor=pointer]:
+              - /url: https://docs.github.com/site-policy/github-terms/github-terms-of-service
+          - listitem [ref=e187]:
+            - link "Privacy" [ref=e188] [cursor=pointer]:
+              - /url: https://docs.github.com/site-policy/privacy-policies/github-privacy-statement
+          - listitem [ref=e189]:
+            - link "Security" [ref=e190] [cursor=pointer]:
+              - /url: https://github.com/security
+          - listitem [ref=e191]:
+            - link "Status" [ref=e192] [cursor=pointer]:
+              - /url: https://www.githubstatus.com/
+          - listitem [ref=e193]:
+            - link "Community" [ref=e194] [cursor=pointer]:
+              - /url: https://github.community/
+          - listitem [ref=e195]:
+            - link "Docs" [ref=e196] [cursor=pointer]:
+              - /url: https://docs.github.com/
+          - listitem [ref=e197]:
+            - link "Contact" [ref=e198] [cursor=pointer]:
+              - /url: https://support.github.com?tags=dotcom-footer
+          - listitem [ref=e199]:
+            - button "Manage cookies" [ref=e201] [cursor=pointer]
+          - listitem [ref=e202]:
+            - button "Do not share my personal information" [ref=e204] [cursor=pointer]

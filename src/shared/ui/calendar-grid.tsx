@@ -7,6 +7,7 @@ export interface CalendarGridProps {
   selectedDateKey?: string | null;
   rangeState?: RangeState;
   shiftDateKeys?: Set<string>;
+  activeDateKey?: string | null;
   titleId?: string;
   ariaLabel: string;
   onDateClick: (date: Date, dateKey: string) => void;
@@ -34,6 +35,7 @@ export function CalendarGrid({
   selectedDateKey,
   rangeState,
   shiftDateKeys = new Set<string>(),
+  activeDateKey,
   titleId,
   ariaLabel,
   onDateClick
@@ -71,6 +73,7 @@ export function CalendarGrid({
             dateKey === todayKey ? 'today' : '',
             dateKey === selectedDateKey ? 'selected' : '',
             shiftDateKeys.has(dateKey) ? 'has-shifts' : '',
+            dateKey === activeDateKey ? 'active-shift' : '',
             getRangeClasses(dateKey, rangeState)
           ]
             .filter(Boolean)
@@ -87,7 +90,8 @@ export function CalendarGrid({
               aria-pressed={dateKey === selectedDateKey || undefined}
               onClick={() => onDateClick(date, dateKey)}
             >
-              {date.getDate()}
+              <span className="calendar-day-number">{date.getDate()}</span>
+              <span className="calendar-day-marker" aria-hidden="true" />
             </button>
           );
         })}

@@ -27,7 +27,7 @@ export default defineConfig({
         scope: '/Shifter/',
         display: 'standalone',
         background_color: '#050506',
-        theme_color: '#45d19e',
+        theme_color: '#ffbf47',
         orientation: 'portrait',
         icons: [
           {

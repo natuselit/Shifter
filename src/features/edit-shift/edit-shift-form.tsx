@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { storage, useStore } from '@/entities/app-state';
 import {
   createShiftId,
@@ -18,6 +18,9 @@ import { CalendarGrid, useToast } from '@/shared/ui';
 interface EditShiftFormProps {
   shift: Shift | ActiveShift;
   mode?: 'edit' | 'create' | 'active';
+  shiftDateKeys?: Set<string>;
+  activeDateKey?: string | null;
+  onDateSwitch?: (dateKey: string) => boolean;
   onCancel: () => void;
   onSaved: (savedShift: Shift | ActiveShift) => void;
 }
@@ -68,6 +71,30 @@ export function parseTimeToMinutes(value: string): number | null {
   return hours * 60 + minutes;
 }
 
+function clampTimePart(value: string, max: number): string {
+  if (value.length < 2) return value;
+  return String(Math.min(Number(value), max)).padStart(2, '0');
+}
+
+export function formatTimeMaskInput(rawValue: string, previousValue = ''): string {
+  const rawText = String(rawValue || '');
+  const previousText = String(previousValue || '');
+  const digits = String(rawValue || '')
+    .replace(/\D/g, '')
+    .slice(0, 4);
+
+  if (digits.length <= 1) return digits;
+
+  const hours = clampTimePart(digits.slice(0, 2), 23);
+  if (digits.length === 2) {
+    const isDeletingSeparator = rawText.length < previousText.length && previousText.endsWith(':');
+    return isDeletingSeparator ? hours : `${hours}:`;
+  }
+
+  const minutes = digits.length === 4 ? clampTimePart(digits.slice(2), 59) : digits.slice(2);
+  return `${hours}:${minutes}`;
+}
+
 export function getTimestampFromDateAndTime(dateKey: string, timeValue: string): number | null {
   const [year, month, day] = String(dateKey || '')
     .split('-')
@@ -91,19 +118,6 @@ export function getTimestampFromDateAndTime(dateKey: string, timeValue: string):
   return date.getTime();
 }
 
-function getTimeParts(value: string): { hours: string; minutes: string } {
-  const minutesFromDayStart = parseTimeToMinutes(value) ?? 0;
-  return {
-    hours: String(Math.floor(minutesFromDayStart / 60)).padStart(2, '0'),
-    minutes: String(minutesFromDayStart % 60).padStart(2, '0')
-  };
-}
-
-function setTimePart(value: string, part: 'hours' | 'minutes', nextValue: string): string {
-  const current = getTimeParts(value);
-  return part === 'hours' ? `${nextValue}:${current.minutes}` : `${current.hours}:${nextValue}`;
-}
-
 export function saveActiveShiftValue(
   shift: ActiveShift,
   startedAt: number,
@@ -125,7 +139,15 @@ export function saveActiveShiftValue(
   };
 }
 
-export function EditShiftForm({ shift, mode = 'edit', onCancel, onSaved }: EditShiftFormProps) {
+export function EditShiftForm({
+  shift,
+  mode = 'edit',
+  shiftDateKeys,
+  activeDateKey,
+  onDateSwitch,
+  onCancel,
+  onSaved
+}: EditShiftFormProps) {
   const isActive = mode === 'active';
   const isCreate = mode === 'create';
   const { refresh } = useStore();
@@ -137,58 +159,43 @@ export function EditShiftForm({ shift, mode = 'edit', onCancel, onSaved }: EditS
   });
   const [startedTime, setStartedTime] = useState(formatTimeInput(shift.startedAt));
   const [endedTime, setEndedTime] = useState(formatTimeInput(shift.endedAt));
-  const [openTimePicker, setOpenTimePicker] = useState<'start' | 'end' | null>(null);
   const [rate, setRate] = useState(String(Number(shift.rate) || 0));
   const [shiftType, setShiftType] = useState<ShiftType>(normalizeShiftType(shift.shiftType, shift.startedAt));
   const [rateMultiplier, setRateMultiplier] = useState<RateMultiplier>(normalizeRateMultiplier(shift.rateMultiplier));
   const [error, setError] = useState('');
   const inputName = useMemo(() => `shiftType-${createShiftId()}`, []);
   const multiplierInputName = useMemo(() => `rateMultiplier-${createShiftId()}`, []);
-  const hourOptions = useMemo(() => Array.from({ length: 24 }, (_, hour) => String(hour).padStart(2, '0')), []);
-  const minuteOptions = useMemo(() => Array.from({ length: 12 }, (_, index) => String(index * 5).padStart(2, '0')), []);
 
-  function renderTimePicker(label: string, value: string, picker: 'start' | 'end', onChange: (value: string) => void) {
-    const parts = getTimeParts(value);
+  useEffect(() => {
+    const nextDate = new Date(shift.startedAt);
+    setDateKey(getDateKey(shift.startedAt));
+    setVisibleMonth(new Date(nextDate.getFullYear(), nextDate.getMonth(), 1));
+    setStartedTime(formatTimeInput(shift.startedAt));
+    setEndedTime(formatTimeInput(shift.endedAt));
+    setRate(String(Number(shift.rate) || 0));
+    setShiftType(normalizeShiftType(shift.shiftType, shift.startedAt));
+    setRateMultiplier(normalizeRateMultiplier(shift.rateMultiplier));
+    setError('');
+  }, [shift.id, shift.startedAt, shift.endedAt, shift.rate, shift.rateMultiplier, shift.shiftType]);
+
+  function renderTimeInput(label: string, value: string, onChange: (value: string) => void) {
+    const inputId = `${inputName}-${label}`;
 
     return (
       <div className="time-picker-field">
-        <span>{label}</span>
-        <button
-          className="time-picker-button"
-          type="button"
-          aria-expanded={openTimePicker === picker}
-          onClick={() => setOpenTimePicker((current) => (current === picker ? null : picker))}
-        >
-          {value}
-        </button>
-        {openTimePicker === picker && (
-          <div className="time-picker-panel">
-            <div className="time-picker-column" aria-label={`${label}: години`}>
-              {hourOptions.map((hour) => (
-                <button
-                  key={hour}
-                  className={`time-option ${parts.hours === hour ? 'selected' : ''}`}
-                  type="button"
-                  onClick={() => onChange(setTimePart(value, 'hours', hour))}
-                >
-                  {hour}
-                </button>
-              ))}
-            </div>
-            <div className="time-picker-column" aria-label={`${label}: хвилини`}>
-              {minuteOptions.map((minutes) => (
-                <button
-                  key={minutes}
-                  className={`time-option ${parts.minutes === minutes ? 'selected' : ''}`}
-                  type="button"
-                  onClick={() => onChange(setTimePart(value, 'minutes', minutes))}
-                >
-                  {minutes}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
+        <label htmlFor={inputId}>{label}</label>
+        <input
+          id={inputId}
+          className="time-mask-input"
+          value={value}
+          inputMode="numeric"
+          maxLength={5}
+          pattern="[0-9]{1,2}:[0-9]{2}"
+          placeholder="06:30"
+          onChange={(event) => onChange(formatTimeMaskInput(event.target.value, value))}
+          onFocus={(event) => event.currentTarget.select()}
+          aria-label={`${label}: час`}
+        />
       </div>
     );
   }
@@ -273,8 +280,15 @@ export function EditShiftForm({ shift, mode = 'edit', onCancel, onSaved }: EditS
           <CalendarGrid
             visibleMonth={visibleMonth}
             selectedDateKey={dateKey}
+            shiftDateKeys={shiftDateKeys}
+            activeDateKey={activeDateKey}
             ariaLabel="Календар дати зміни"
             onDateClick={(date, nextDateKey) => {
+              if (onDateSwitch) {
+                onDateSwitch(nextDateKey);
+                return;
+              }
+
               setDateKey(nextDateKey);
               setVisibleMonth(new Date(date.getFullYear(), date.getMonth(), 1));
             }}
@@ -282,8 +296,8 @@ export function EditShiftForm({ shift, mode = 'edit', onCancel, onSaved }: EditS
         </div>
       </div>
       <div className="time-grid">
-        {renderTimePicker('Прихід', startedTime, 'start', setStartedTime)}
-        {!isActive && renderTimePicker('Вихід', endedTime, 'end', setEndedTime)}
+        {renderTimeInput('Прихід', startedTime, setStartedTime)}
+        {!isActive && renderTimeInput('Вихід', endedTime, setEndedTime)}
       </div>
       {!isActive && (
         <fieldset className="shift-type-control">
@@ -313,6 +327,7 @@ export function EditShiftForm({ shift, mode = 'edit', onCancel, onSaved }: EditS
           min="0"
           step="0.001"
           inputMode="decimal"
+          onWheel={(event) => event.currentTarget.blur()}
         />
       </label>
       <fieldset className="shift-type-control">

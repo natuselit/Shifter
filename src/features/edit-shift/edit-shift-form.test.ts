@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { storage } from '@/entities/app-state';
 import type { ActiveShift } from '@/entities/shift';
 import {
+  formatTimeMaskInput,
   formatTimeInput,
   getTimestampFromDateAndTime,
   parseTimeToMinutes,
@@ -56,6 +57,23 @@ describe('edit active shift', () => {
 describe('shift date and time helpers', () => {
   it('formats timestamps as HH:mm', () => {
     expect(formatTimeInput(new Date(2026, 5, 15, 6, 5).getTime())).toBe('06:05');
+  });
+
+  it('formats typed time values with an automatic separator', () => {
+    expect(formatTimeMaskInput('0')).toBe('0');
+    expect(formatTimeMaskInput('06')).toBe('06:');
+    expect(formatTimeMaskInput('063')).toBe('06:3');
+    expect(formatTimeMaskInput('0630')).toBe('06:30');
+    expect(formatTimeMaskInput('06:30')).toBe('06:30');
+    expect(formatTimeMaskInput('a0b6:3c0d9')).toBe('06:30');
+  });
+
+  it('allows deleting the automatic separator and clamps invalid time parts', () => {
+    expect(formatTimeMaskInput('06', '06:')).toBe('06');
+    expect(formatTimeMaskInput('0', '06')).toBe('0');
+    expect(formatTimeMaskInput('', '0')).toBe('');
+    expect(formatTimeMaskInput('29')).toBe('23:');
+    expect(formatTimeMaskInput('2960')).toBe('23:59');
   });
 
   it('parses valid time values', () => {
