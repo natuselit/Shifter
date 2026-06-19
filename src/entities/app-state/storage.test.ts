@@ -1,15 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { storage } from './storage';
+import { normalizeStoredData, storage } from './storage';
 
 function installLocalStorage() {
   const values = new Map<string, string>();
+  const setItem = vi.fn((key: string, value: string) => values.set(key, value));
 
   vi.stubGlobal('localStorage', {
     getItem: (key: string) => values.get(key) ?? null,
-    setItem: (key: string, value: string) => values.set(key, value),
+    setItem,
     removeItem: (key: string) => values.delete(key),
     clear: () => values.clear()
   });
+
+  return { setItem };
 }
 
 describe('app-state storage', () => {
@@ -60,5 +63,27 @@ describe('app-state storage', () => {
 
     expect(storage.shifts).not.toBe(firstRead);
     expect(storage.shifts[0]?.id).toBe('2');
+  });
+
+  it('does not rewrite sorted shifts during normalization', () => {
+    const { setItem } = installLocalStorage();
+    const shift = {
+      id: '1',
+      startedAt: new Date(2026, 5, 15, 6, 30).getTime(),
+      endedAt: new Date(2026, 5, 15, 14, 30).getTime(),
+      rate: 100,
+      shiftType: '1 зміна',
+      rateMultiplier: 1,
+      doubleRate: false
+    };
+
+    localStorage.setItem('shifts', JSON.stringify([shift]));
+    localStorage.setItem('lastShift', JSON.stringify(shift));
+    setItem.mockClear();
+
+    normalizeStoredData();
+
+    expect(setItem).not.toHaveBeenCalledWith('shifts', expect.any(String));
+    expect(setItem).not.toHaveBeenCalledWith('lastShift', expect.any(String));
   });
 });

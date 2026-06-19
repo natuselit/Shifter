@@ -24,7 +24,8 @@ import {
   getStoredScheduleText,
   parseScheduleText,
   saveScheduleTextValue,
-  syncShiftsWithScheduleEntries
+  syncShiftsWithScheduleEntries,
+  type ScheduleParseResult
 } from '@/features/schedule-plan';
 import {
   formatDateOnly,
@@ -42,6 +43,8 @@ import { ShiftCard, VirtualShiftList } from '@/widgets/shift-list';
 export type ReportsView = 'shifts' | 'analytics';
 
 type ReportAnalytics = ReturnType<typeof buildReportAnalytics>;
+
+const emptyScheduleParseResult: ScheduleParseResult = { entries: [], errors: [] };
 
 function ScheduleDiffList({
   rows
@@ -139,8 +142,13 @@ export function ReportsPage({ view = 'shifts' }: { view?: ReportsView }) {
   const [editingShiftId, setEditingShiftId] = useState<string | null>(null);
   const [creatingShift, setCreatingShift] = useState(false);
   const [chartMode, setChartMode] = useState<ChartMode>('pay');
-  const [scheduleText, setScheduleText] = useState(getStoredScheduleText);
+  const [scheduleText, setScheduleText] = useState(() => (view === 'analytics' ? getStoredScheduleText() : ''));
   const deferredScheduleText = useDeferredValue(scheduleText);
+
+  useEffect(() => {
+    if (view !== 'analytics') return;
+    setScheduleText((current) => current || getStoredScheduleText());
+  }, [view]);
 
   const range = useMemo(() => getRangeKeys(rangeState), [rangeState]);
   const rangeLabel = useMemo(() => getRangeLabel(rangeState), [rangeState]);
@@ -307,7 +315,10 @@ export function ReportsPage({ view = 'shifts' }: { view?: ReportsView }) {
     };
   }, [editingShift]);
   const hasVisibleHistory = Boolean(activeHistoryShift) || historyVisibleShifts.length > 0;
-  const scheduleParseResult = useMemo(() => parseScheduleText(deferredScheduleText), [deferredScheduleText]);
+  const scheduleParseResult = useMemo(
+    () => (view === 'analytics' ? parseScheduleText(deferredScheduleText) : emptyScheduleParseResult),
+    [deferredScheduleText, view]
+  );
   const analytics = useMemo<ReportAnalytics | null>(() => {
     if (view !== 'analytics') return null;
 

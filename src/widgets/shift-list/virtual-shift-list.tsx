@@ -21,20 +21,20 @@ interface VirtualShiftListProps {
 }
 
 interface VirtualShiftRowProps {
-  index: number;
+  shiftId: string;
   top: number;
   children: ReactNode;
-  onMeasure: (index: number, height: number) => void;
+  onMeasure: (shiftId: string, height: number) => void;
 }
 
-function VirtualShiftRow({ index, top, children, onMeasure }: VirtualShiftRowProps) {
+function VirtualShiftRow({ shiftId, top, children, onMeasure }: VirtualShiftRowProps) {
   const rowRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     const element = rowRef.current;
     if (!element) return undefined;
 
-    const measure = () => onMeasure(index, element.offsetHeight);
+    const measure = () => onMeasure(shiftId, element.offsetHeight);
     measure();
 
     if (typeof ResizeObserver === 'undefined') {
@@ -45,7 +45,7 @@ function VirtualShiftRow({ index, top, children, onMeasure }: VirtualShiftRowPro
     const observer = new ResizeObserver(measure);
     observer.observe(element);
     return () => observer.disconnect();
-  }, [index, onMeasure]);
+  }, [shiftId, onMeasure]);
 
   return (
     <div
@@ -62,17 +62,13 @@ function VirtualShiftRow({ index, top, children, onMeasure }: VirtualShiftRowPro
 export function VirtualShiftList({ before, shifts, renderShift }: VirtualShiftListProps) {
   const historyRef = useRef<HTMLDivElement | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
-  const [itemHeights, setItemHeights] = useState<number[]>([]);
+  const [itemHeightsById, setItemHeightsById] = useState<Record<string, number>>({});
   const [viewport, setViewport] = useState(() => ({
     scrollTop: 0,
     viewportHeight: typeof window === 'undefined' ? 800 : window.innerHeight
   }));
 
   const shouldVirtualize = shifts.length > virtualListThreshold;
-
-  useEffect(() => {
-    setItemHeights([]);
-  }, [shifts]);
 
   const updateViewport = useCallback(() => {
     const list = listRef.current;
@@ -114,16 +110,19 @@ export function VirtualShiftList({ before, shifts, renderShift }: VirtualShiftLi
     };
   }, [shouldVirtualize, updateViewport]);
 
-  const measureRow = useCallback((index: number, height: number) => {
+  const measureRow = useCallback((shiftId: string, height: number) => {
     if (height <= 0) return;
 
-    setItemHeights((current) => {
-      if (current[index] === height) return current;
-      const next = current.slice();
-      next[index] = height;
-      return next;
+    setItemHeightsById((current) => {
+      if (current[shiftId] === height) return current;
+      return { ...current, [shiftId]: height };
     });
   }, []);
+
+  const itemHeights = useMemo(
+    () => shifts.map((shift) => itemHeightsById[shift.id] || 0),
+    [itemHeightsById, shifts]
+  );
 
   const measurements = useMemo(
     () => buildVirtualMeasurements(shifts.length, itemHeights, estimatedRowHeight),
@@ -164,7 +163,12 @@ export function VirtualShiftList({ before, shifts, renderShift }: VirtualShiftLi
           {shifts.slice(windowRange.startIndex, windowRange.endIndex).map((shift, offset) => {
             const index = windowRange.startIndex + offset;
             return (
-              <VirtualShiftRow key={shift.id} index={index} top={measurements.offsets[index] || 0} onMeasure={measureRow}>
+              <VirtualShiftRow
+                key={shift.id}
+                shiftId={shift.id}
+                top={measurements.offsets[index] || 0}
+                onMeasure={measureRow}
+              >
                 {renderShift(shift)}
               </VirtualShiftRow>
             );

@@ -70,6 +70,29 @@ function readShifts(): Shift[] {
   return value;
 }
 
+function areShiftsSortedNewestFirst(shifts: Shift[]): boolean {
+  for (let index = 1; index < shifts.length; index += 1) {
+    if (shifts[index - 1].startedAt < shifts[index].startedAt) return false;
+  }
+
+  return true;
+}
+
+function areSameShift(first: Shift | null, second: Shift | null): boolean {
+  if (first === second) return true;
+  if (!first || !second) return false;
+
+  return (
+    first.id === second.id &&
+    first.startedAt === second.startedAt &&
+    first.endedAt === second.endedAt &&
+    first.rate === second.rate &&
+    first.shiftType === second.shiftType &&
+    first.rateMultiplier === second.rateMultiplier &&
+    first.doubleRate === second.doubleRate
+  );
+}
+
 export const storage = {
   get settings(): Settings {
     return readSettings();
@@ -163,7 +186,13 @@ export function normalizeStoredData(): void {
   removeStorageItem('airAlarmMs');
   removeStorageItem('airAlarmIntervals');
 
-  const sorted = [...storage.shifts].sort((first, second) => second.startedAt - first.startedAt);
-  storage.shifts = sorted;
-  storage.lastShift = sorted[0] || null;
+  const shifts = storage.shifts;
+  const sorted = areShiftsSortedNewestFirst(shifts)
+    ? shifts
+    : [...shifts].sort((first, second) => second.startedAt - first.startedAt);
+
+  if (sorted !== shifts) storage.shifts = sorted;
+
+  const lastShift = sorted[0] || null;
+  if (!areSameShift(storage.lastShift, lastShift)) storage.lastShift = lastShift;
 }

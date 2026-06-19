@@ -46,13 +46,10 @@ interface ScheduleDiff {
 }
 
 export function getMonthShifts<T extends Shift>(shifts: T[], monthDate: Date): T[] {
-  const year = monthDate.getFullYear();
-  const month = monthDate.getMonth();
+  const start = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1).getTime();
+  const end = new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 1).getTime();
 
-  return shifts.filter((shift) => {
-    const startedAt = new Date(shift.startedAt);
-    return startedAt.getFullYear() === year && startedAt.getMonth() === month;
-  });
+  return shifts.filter((shift) => shift.startedAt >= start && shift.startedAt < end);
 }
 
 export function getWeekRange(date = new Date()): { startKey: string; endKey: string } {

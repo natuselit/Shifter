@@ -37,4 +37,19 @@ describe('virtual window helpers', () => {
       })
     ).toEqual({ startIndex: 0, endIndex: 0 });
   });
+
+  it('finds a window near the end of a large list', () => {
+    const measurements = buildVirtualMeasurements(10_000, [], 100);
+    const window = calculateVirtualWindow({
+      itemCount: 10_000,
+      scrollTop: 995_000,
+      viewportHeight: 500,
+      itemOffsets: measurements.offsets,
+      itemHeights: [],
+      estimatedItemHeight: 100,
+      overscan: 2
+    });
+
+    expect(window).toEqual({ startIndex: 9947, endIndex: 9957 });
+  });
 });
