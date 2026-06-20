@@ -11,7 +11,7 @@ const appUpdatedAt =
   buildEnv.APP_UPDATED_AT ??
   (Number.isFinite(sourceDateEpoch) && sourceDateEpoch > 0
     ? new Date(sourceDateEpoch * 1000).toISOString()
-    : packageJson.version);
+    : new Date().toISOString());
 
 export default defineConfig({
   base: '/Shifter/',
