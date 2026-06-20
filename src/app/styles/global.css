@@ -704,6 +704,31 @@ button:disabled {
   min-width: 86px;
 }
 
+.history-fps {
+  position: sticky;
+  top: 8px;
+  z-index: 6;
+  width: fit-content;
+  max-width: 100%;
+  min-height: 42px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin: 10px 0 2px;
+  padding: 0 10px;
+  border: 1px solid color-mix(in srgb, var(--primary) 20%, var(--border));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--surface-soft) 88%, var(--bg));
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.28);
+  color: var(--primary);
+  font-size: 12px;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+  overflow-x: auto;
+  white-space: nowrap;
+  backdrop-filter: blur(10px);
+}
+
 .history {
   display: grid;
   gap: 10px;

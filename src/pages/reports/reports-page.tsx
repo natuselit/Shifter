@@ -4,6 +4,7 @@ import {
   useDeferredValue,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ChangeEvent,
   type ClipboardEvent,
@@ -184,6 +185,79 @@ function LiveActiveShiftCard({ shift, onEdit }: { shift: ActiveShift; onEdit: (s
   const liveShift = useMemo(() => ({ ...shift, endedAt: now }), [now, shift]);
 
   return <ShiftCard shift={liveShift} showActions onEdit={onEdit} />;
+}
+
+function HistoryFpsMeter() {
+  const valueRef = useRef<HTMLSpanElement | null>(null);
+  const renderCountRef = useRef(0);
+
+  useEffect(() => {
+    renderCountRef.current += 1;
+  });
+
+  useEffect(() => {
+    let frameId = 0;
+    let frames = 0;
+    let longFrames = 0;
+    let scrollEvents = 0;
+    let lastUpdate = performance.now();
+    let lastFrame = lastUpdate;
+    let lowestFps = Number.POSITIVE_INFINITY;
+    let worstFrameMs = 0;
+
+    const handleScroll = () => {
+      scrollEvents += 1;
+    };
+
+    const tick = (now: number) => {
+      frames += 1;
+      const frameMs = now - lastFrame;
+      lastFrame = now;
+      if (frameMs > 0) {
+        lowestFps = Math.min(lowestFps, 1000 / frameMs);
+        worstFrameMs = Math.max(worstFrameMs, frameMs);
+        if (frameMs > 50) longFrames += 1;
+      }
+
+      const elapsed = now - lastUpdate;
+      if (elapsed >= 700) {
+        const fps = Math.round((frames * 1000) / elapsed);
+        const low = Number.isFinite(lowestFps) ? Math.round(lowestFps) : fps;
+        const scrollRate = Math.round((scrollEvents * 1000) / elapsed);
+        if (valueRef.current) {
+          valueRef.current.textContent = [
+            `${fps} FPS`,
+            `min ${low}`,
+            `${Math.round(worstFrameMs)}ms`,
+            `drop ${longFrames}`,
+            `scroll ${scrollRate}/s`,
+            `render ${renderCountRef.current}`
+          ].join(' · ');
+        }
+        frames = 0;
+        longFrames = 0;
+        scrollEvents = 0;
+        lowestFps = Number.POSITIVE_INFINITY;
+        worstFrameMs = 0;
+        lastUpdate = now;
+      }
+
+      frameId = window.requestAnimationFrame(tick);
+    };
+
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    frameId = window.requestAnimationFrame(tick);
+    return () => {
+      window.cancelAnimationFrame(frameId);
+      window.removeEventListener('scroll', handleScroll);
+    };
+  }, []);
+
+  return (
+    <div className="history-fps" aria-label="FPS історії">
+      <span ref={valueRef}>FPS ...</span>
+    </div>
+  );
 }
 
 export function ReportsPage({ view = 'shifts' }: { view?: ReportsView }) {
@@ -545,6 +619,7 @@ export function ReportsPage({ view = 'shifts' }: { view?: ReportsView }) {
                   </button>
                 </div>
               </div>
+              <HistoryFpsMeter />
               <VirtualShiftList
                 before={activeHistoryCard}
                 shifts={historyVisibleShifts}
