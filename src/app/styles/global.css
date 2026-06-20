@@ -116,10 +116,8 @@ h2 {
   border: 1px solid var(--border);
   border-radius: 8px;
   background: color-mix(in srgb, var(--surface) 94%, transparent);
-  box-shadow: var(--shadow);
+  box-shadow: none;
   contain: layout paint;
-  content-visibility: auto;
-  contain-intrinsic-size: auto 280px;
 }
 
 .shift-panel {
@@ -705,28 +703,30 @@ button:disabled {
 }
 
 .history-fps {
-  position: sticky;
-  top: 8px;
-  z-index: 6;
+  position: fixed;
+  top: max(8px, env(safe-area-inset-top));
+  right: 10px;
+  left: 10px;
+  z-index: 40;
   width: fit-content;
   max-width: 100%;
   min-height: 42px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  margin: 10px 0 2px;
+  margin: 0 auto;
   padding: 0 10px;
   border: 1px solid color-mix(in srgb, var(--primary) 20%, var(--border));
   border-radius: 8px;
-  background: color-mix(in srgb, var(--surface-soft) 88%, var(--bg));
-  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.28);
+  background: #15171c;
+  box-shadow: none;
   color: var(--primary);
   font-size: 12px;
   font-weight: 900;
   font-variant-numeric: tabular-nums;
   overflow-x: auto;
   white-space: nowrap;
-  backdrop-filter: blur(10px);
+  pointer-events: none;
 }
 
 .history {
@@ -745,17 +745,9 @@ button:disabled {
   border: 1px solid color-mix(in srgb, var(--primary) 16%, var(--border));
   border-radius: 8px;
   background: color-mix(in srgb, var(--surface) 82%, var(--bg));
-  box-shadow:
-    0 10px 30px rgba(0, 0, 0, 0.2),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.02);
+  box-shadow: none;
   overflow: hidden;
-  contain: layout paint;
-  content-visibility: auto;
-  contain-intrinsic-size: auto 140px;
-  transition:
-    border-color 0.22s ease,
-    background-color 0.22s ease,
-    transform 0.18s ease;
+  contain: layout style paint;
 }
 
 .history-virtual {
@@ -802,18 +794,12 @@ button:disabled {
   min-width: 0;
   padding: 11px 12px 10px;
   border-radius: 8px;
-  background:
-    linear-gradient(135deg, color-mix(in srgb, var(--primary) 8%, transparent), transparent 42%),
-    color-mix(in srgb, var(--surface-soft) 58%, var(--bg));
+  background: color-mix(in srgb, var(--surface-soft) 58%, var(--bg));
   overflow: hidden;
-  transition:
-    background-color 0.22s ease;
 }
 
 .shift-second-card .history-card-content {
-  background:
-    linear-gradient(135deg, color-mix(in srgb, var(--work) 9%, transparent), transparent 42%),
-    color-mix(in srgb, var(--surface-soft) 58%, var(--bg));
+  background: color-mix(in srgb, var(--surface-soft) 58%, var(--bg));
 }
 
 .history strong {
@@ -1366,16 +1352,7 @@ input:focus {
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--nav);
-  box-shadow: 0 -10px 34px rgba(0, 0, 0, 0.3);
-  -webkit-backdrop-filter: blur(10px);
-  backdrop-filter: blur(10px);
-}
-
-@media (max-width: 719px) {
-  .bottom-nav {
-    -webkit-backdrop-filter: none;
-    backdrop-filter: none;
-  }
+  box-shadow: none;
 }
 
 .bottom-nav a {
