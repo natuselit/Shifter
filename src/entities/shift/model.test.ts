@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { calculatePay, detectShiftType, hasShiftOnDate, normalizeShiftValue } from './model';
+import {
+  calculatePay,
+  detectShiftType,
+  getShiftsInTimeRange,
+  getShiftsOnDate,
+  hasShiftOnDate,
+  normalizeShiftValue
+} from './model';
 
 describe('shift model', () => {
   it('detects shift types by start time', () => {
@@ -80,5 +87,24 @@ describe('shift model', () => {
     expect(hasShiftOnDate([shift], '2026-06-15')).toBe(true);
     expect(hasShiftOnDate([shift], '2026-06-15', shift.id)).toBe(false);
     expect(hasShiftOnDate([shift], 'bad-date')).toBe(false);
+  });
+
+  it('gets shifts from a sorted history range without scanning unrelated dates', () => {
+    const shifts = [20, 18, 15, 10].map((day) => ({
+      id: String(day),
+      startedAt: new Date(2026, 5, day, 6, 30).getTime(),
+      endedAt: new Date(2026, 5, day, 14, 30).getTime(),
+      rate: 100,
+      shiftType: '1 зміна' as const,
+      rateMultiplier: 1 as const,
+      doubleRate: false
+    }));
+
+    expect(getShiftsOnDate(shifts, '2026-06-18').map((shift) => shift.id)).toEqual(['18']);
+    expect(
+      getShiftsInTimeRange(shifts, new Date(2026, 5, 15).getTime(), new Date(2026, 5, 19).getTime()).map(
+        (shift) => shift.id
+      )
+    ).toEqual(['18', '15']);
   });
 });

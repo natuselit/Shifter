@@ -1,4 +1,4 @@
-import type { Shift } from '@/entities/shift';
+import { getShiftsInTimeRange, type Shift } from '@/entities/shift';
 import { getTimestampFromDateKey } from '@/shared/lib';
 import { getRangeKeys, type RangeState } from '@/shared/lib/range';
 
@@ -18,10 +18,5 @@ export function filterShiftsByRange<T extends Shift>(shifts: T[], state: RangeSt
   const end = getTimestampFromDateKey(range.endKey, true);
   if (start === null || end === null) return [];
 
-  const filtered: T[] = [];
-  for (const shift of shifts) {
-    if (shift.startedAt >= start && shift.startedAt <= end) filtered.push(shift);
-  }
-
-  return filtered;
+  return getShiftsInTimeRange(shifts, start, end + 1);
 }

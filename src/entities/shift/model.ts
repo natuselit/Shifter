@@ -91,6 +91,41 @@ export function isShiftInDateRange(shift: Shift, startKey: string, endKey: strin
   return start !== null && end !== null && shift.startedAt >= start && shift.startedAt <= end;
 }
 
+function findFirstShiftBefore<T extends Pick<Shift, 'startedAt'>>(shifts: T[], timestamp: number): number {
+  let low = 0;
+  let high = shifts.length;
+
+  while (low < high) {
+    const middle = Math.floor((low + high) / 2);
+    if (shifts[middle].startedAt < timestamp) high = middle;
+    else low = middle + 1;
+  }
+
+  return low;
+}
+
+export function getShiftsInTimeRange<T extends Shift>(shifts: T[], start: number, end: number): T[] {
+  if (shifts.length === 0 || end <= start) return [];
+
+  if (shifts.length > 1 && shifts[0].startedAt < shifts[shifts.length - 1].startedAt) {
+    const filtered: T[] = [];
+    for (const shift of shifts) {
+      if (shift.startedAt >= start && shift.startedAt < end) filtered.push(shift);
+    }
+    return filtered;
+  }
+
+  const startIndex = findFirstShiftBefore(shifts, end);
+  const endIndex = findFirstShiftBefore(shifts, start);
+  return shifts.slice(startIndex, endIndex);
+}
+
+export function getShiftsOnDate<T extends Shift>(shifts: T[], dateKey: string): T[] {
+  const start = getTimestampFromDateKey(dateKey);
+  const endOfDay = getTimestampFromDateKey(dateKey, true);
+  return start === null || endOfDay === null ? [] : getShiftsInTimeRange(shifts, start, endOfDay + 1);
+}
+
 export function getShiftWindow(
   timestamp: number,
   forcedShiftType?: ShiftType

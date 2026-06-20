@@ -14,6 +14,8 @@ import {
   calculatePay,
   detectShiftType,
   getDateKey,
+  getShiftsOnDate,
+  getShiftsInTimeRange,
   getTimestampFromDateKey,
   type ActiveShift,
   type Shift
@@ -62,6 +64,27 @@ const emptyChartTitle: ReportAnalytics['getChartTitle'] = () => '';
 const emptyChartValue: ReportAnalytics['getChartValue'] = () => 0;
 const emptyPlannedChartValue: ReportAnalytics['getPlannedChartValue'] = () => 0;
 const scheduleParseDebounceMs = 180;
+
+function getCalendarGridRange(month: Date): { start: number; end: number } {
+  const firstDay = new Date(month.getFullYear(), month.getMonth(), 1);
+  const startOffset = (firstDay.getDay() + 6) % 7;
+  const gridStart = new Date(month.getFullYear(), month.getMonth(), 1 - startOffset);
+  const gridEnd = new Date(gridStart);
+  gridEnd.setDate(gridStart.getDate() + 42);
+
+  return { start: gridStart.getTime(), end: gridEnd.getTime() };
+}
+
+function getCalendarShiftDateKeys(shifts: Shift[], month: Date): Set<string> {
+  const { start, end } = getCalendarGridRange(month);
+  const keys = new Set<string>();
+
+  for (const shift of getShiftsInTimeRange(shifts, start, end)) {
+    keys.add(getDateKey(shift.startedAt));
+  }
+
+  return keys;
+}
 
 function useDebouncedValue<T>(value: T, delayMs: number): T {
   const [debouncedValue, setDebouncedValue] = useState(value);
@@ -205,23 +228,19 @@ export function ReportsPage({ view = 'shifts' }: { view?: ReportsView }) {
     if (!activeShift) return null;
     if (range) return filterShiftsByRange([activeShift], rangeState)[0] || null;
     if (selectedDateKey) return getDateKey(activeShift.startedAt) === selectedDateKey ? activeShift : null;
-    return activeShift;
-  }, [activeShift, range, rangeState, selectedDateKey]);
+    return getMonthShifts([activeShift], visibleMonth)[0] || null;
+  }, [activeShift, range, rangeState, selectedDateKey, visibleMonth]);
   const reportShifts = useMemo(() => {
     if (range) return filterShiftsByRange(shifts, rangeState);
-    if (selectedDateKey) return shifts.filter((shift) => getDateKey(shift.startedAt) === selectedDateKey);
+    if (selectedDateKey) return getShiftsOnDate(shifts, selectedDateKey);
     return getMonthShifts(shifts, visibleMonth);
   }, [range, rangeState, selectedDateKey, shifts, visibleMonth]);
-  const historyVisibleShifts = useMemo(() => {
-    if (range) return filterShiftsByRange(shifts, rangeState);
-    if (selectedDateKey) return shifts.filter((shift) => getDateKey(shift.startedAt) === selectedDateKey);
-    return shifts;
-  }, [range, rangeState, selectedDateKey, shifts]);
+  const historyVisibleShifts = reportShifts;
   const shiftDateKeys = useMemo(() => {
-    const keys = new Set(shifts.map((shift) => getDateKey(shift.startedAt)));
+    const keys = getCalendarShiftDateKeys(shifts, visibleMonth);
     if (startedAt) keys.add(getDateKey(startedAt));
     return keys;
-  }, [shifts, startedAt]);
+  }, [shifts, startedAt, visibleMonth]);
   const activeDateKey = startedAt ? getDateKey(startedAt) : null;
   const calendarSummary = useMemo(() => {
     const totalMs = reportShifts.reduce((sum, shift) => sum + Math.max(0, shift.endedAt - shift.startedAt), 0);
@@ -242,7 +261,7 @@ export function ReportsPage({ view = 'shifts' }: { view?: ReportsView }) {
     ? `Зміни за ${rangeLabel}`
     : selectedDateKey
       ? `Зміни за ${formatDateOnly(getTimestampFromDateKey(selectedDateKey) || Date.now())}`
-      : 'Усі зміни';
+      : `Зміни за ${formatMonth(visibleMonth)}`;
 
   const chooseDate = useCallback((date: Date, dateKey: string) => {
     setSelectedDateKey(dateKey);
@@ -301,7 +320,7 @@ export function ReportsPage({ view = 'shifts' }: { view?: ReportsView }) {
         return true;
       }
 
-      const nextShift = shifts.find((shift) => getDateKey(shift.startedAt) === dateKey);
+      const nextShift = getShiftsOnDate(shifts, dateKey)[0];
       if (!nextShift) return false;
 
       setEditingShiftId(nextShift.id);
@@ -328,13 +347,11 @@ export function ReportsPage({ view = 'shifts' }: { view?: ReportsView }) {
       ) : null,
     [activeHistoryShift, handleEditShift]
   );
-  const editingShift = useMemo(
-    () =>
-      editingShiftId && activeShift?.id === editingShiftId
-        ? activeShift
-        : shifts.find((shift) => shift.id === editingShiftId) || null,
-    [activeShift, editingShiftId, shifts]
-  );
+  const editingShift = useMemo(() => {
+    if (!editingShiftId) return null;
+    if (activeShift?.id === editingShiftId) return activeShift;
+    return shifts.find((shift) => shift.id === editingShiftId) || null;
+  }, [activeShift, editingShiftId, shifts]);
 
   useEffect(() => {
     if (!editingShift) return undefined;
@@ -538,7 +555,7 @@ export function ReportsPage({ view = 'shifts' }: { view?: ReportsView }) {
                   ? 'За цей період записів немає.'
                   : selectedDateKey
                     ? 'За цей день записів немає.'
-                    : 'Історія порожня.'}
+                    : 'За цей місяць записів немає.'}
               </p>
             </section>
           </>

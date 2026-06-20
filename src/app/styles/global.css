@@ -754,6 +754,11 @@ button:disabled {
   padding-bottom: 10px;
 }
 
+.history-load-more {
+  width: 100%;
+  margin-top: 10px;
+}
+
 .create-shift-panel {
   border-color: color-mix(in srgb, var(--primary) 24%, var(--border));
   background: color-mix(in srgb, var(--surface) 88%, var(--primary) 4%);

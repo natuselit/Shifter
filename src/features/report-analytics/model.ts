@@ -1,6 +1,7 @@
 import {
   calculatePay,
   getDateKey,
+  getShiftsInTimeRange,
   getTimestampFromDateKey,
   normalizeRateMultiplier,
   type Shift
@@ -58,13 +59,7 @@ interface ScheduleDiffRow {
 export function getMonthShifts<T extends Shift>(shifts: T[], monthDate: Date): T[] {
   const start = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1).getTime();
   const end = new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 1).getTime();
-  const monthShifts: T[] = [];
-
-  for (const shift of shifts) {
-    if (shift.startedAt >= start && shift.startedAt < end) monthShifts.push(shift);
-  }
-
-  return monthShifts;
+  return getShiftsInTimeRange(shifts, start, end);
 }
 
 export function getWeekRange(date = new Date()): { startKey: string; endKey: string } {
