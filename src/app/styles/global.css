@@ -754,12 +754,13 @@ button:disabled {
   position: relative;
   display: block;
   min-height: 1px;
-  contain: layout paint;
+  contain: layout style paint;
 }
 
 .history-virtual-spacer {
   position: relative;
   width: 100%;
+  contain: strict;
 }
 
 .virtual-shift-row {
@@ -769,11 +770,11 @@ button:disabled {
   left: 0;
   box-sizing: border-box;
   padding-bottom: 10px;
+  contain: layout style paint;
 }
 
-.history-load-more {
-  width: 100%;
-  margin-top: 10px;
+.virtual-shift-row > .history-card {
+  height: calc(100% - 10px);
 }
 
 .create-shift-panel {
