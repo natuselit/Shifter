@@ -1,27 +1,17 @@
 import { describe, expect, it } from 'vitest';
-import { buildVirtualMeasurements, calculateVirtualWindow } from './virtual-window';
+import { calculateVirtualWindow } from './virtual-window';
 
 describe('virtual window helpers', () => {
-  it('builds offsets from measured and estimated row heights', () => {
-    const measurements = buildVirtualMeasurements(4, [50, 60], 100);
-
-    expect(measurements.offsets).toEqual([0, 50, 110, 210]);
-    expect(measurements.totalHeight).toBe(310);
-  });
-
   it('returns an overscanned visible window', () => {
-    const measurements = buildVirtualMeasurements(4, [50, 60, 70, 80], 100);
     const window = calculateVirtualWindow({
-      itemCount: 4,
-      scrollTop: 55,
-      viewportHeight: 70,
-      itemOffsets: measurements.offsets,
-      itemHeights: [50, 60, 70, 80],
-      estimatedItemHeight: 100,
-      overscan: 1
+      itemCount: 100,
+      scrollTop: 360,
+      viewportHeight: 420,
+      itemHeight: 120,
+      overscan: 2
     });
 
-    expect(window).toEqual({ startIndex: 0, endIndex: 4 });
+    expect(window).toEqual({ startIndex: 1, endIndex: 10 });
   });
 
   it('handles empty lists', () => {
@@ -30,26 +20,21 @@ describe('virtual window helpers', () => {
         itemCount: 0,
         scrollTop: 0,
         viewportHeight: 600,
-        itemOffsets: [],
-        itemHeights: [],
-        estimatedItemHeight: 100,
+        itemHeight: 100,
         overscan: 2
       })
     ).toEqual({ startIndex: 0, endIndex: 0 });
   });
 
-  it('finds a window near the end of a large list', () => {
-    const measurements = buildVirtualMeasurements(10_000, [], 100);
+  it('clamps a window near the end of a large list', () => {
     const window = calculateVirtualWindow({
       itemCount: 10_000,
-      scrollTop: 995_000,
+      scrollTop: 1_199_400,
       viewportHeight: 500,
-      itemOffsets: measurements.offsets,
-      itemHeights: [],
-      estimatedItemHeight: 100,
+      itemHeight: 120,
       overscan: 2
     });
 
-    expect(window).toEqual({ startIndex: 9947, endIndex: 9957 });
+    expect(window).toEqual({ startIndex: 9993, endIndex: 10000 });
   });
 });

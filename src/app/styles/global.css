@@ -750,6 +750,7 @@ button:disabled {
   top: 0;
   right: 0;
   left: 0;
+  box-sizing: border-box;
   padding-bottom: 10px;
 }
 
